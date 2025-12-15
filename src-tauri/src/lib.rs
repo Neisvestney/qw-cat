@@ -1,6 +1,7 @@
 mod ffmpeg;
 mod ffprobe;
 mod select_new_video_file_command;
+mod ffmpeg_time_duration;
 
 use crate::ffmpeg::create_ffmpeg_tasks_queue;
 use crate::select_new_video_file_command::select_new_video_file;

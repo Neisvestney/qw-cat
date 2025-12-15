@@ -1,5 +1,5 @@
 use crate::APP_HANDLE;
-use crate::ffprobe::{get_video_audio_streams_info, pase_duration};
+use crate::ffprobe::{get_video_audio_streams_info};
 use crate::select_new_video_file_command::AudioStreamFilePath;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
@@ -7,8 +7,9 @@ use ffmpeg_sidecar::command::FfmpegCommand;
 use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{Emitter, Manager};
 use tokio::sync::{Mutex, MutexGuard, RwLock, oneshot};
+use crate::ffmpeg_time_duration::FfmpegTimeDuration;
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -167,7 +168,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                                 let ffmpeg_task_clone = ffmpeg_task_clone.clone();
                                 tokio::spawn(async move {
                                     let mut ffmpeg_task = ffmpeg_task_clone.write().await;
-                                    let progress = pase_duration(&p.time) / info.duration;
+                                    let progress = FfmpegTimeDuration::from_str(&p.time).unwrap().as_seconds() / info.duration;
                                     ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
                                     drop(ffmpeg_task);
                                     emit_ffmpeg_queue_status().await;

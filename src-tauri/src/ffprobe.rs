@@ -70,23 +70,3 @@ pub fn get_video_audio_streams_info(path: impl AsRef<str>) -> Option<VideoAudioS
 
     parse_ffprobe_output(&output_str).ok()
 }
-
-pub fn pase_duration(duration: &str) -> f64 {
-    let parts: Vec<&str> = duration.split(':').collect();
-    if parts.len() != 3 {
-        return 0.0;
-    }
-
-    let hours: f64 = parts[0].parse().unwrap_or(0.0);
-    let minutes: f64 = parts[1].parse().unwrap_or(0.0);
-
-    let seconds_parts: Vec<&str> = parts[2].split('.').collect();
-    let seconds: f64 = seconds_parts[0].parse().unwrap_or(0.0);
-    let milliseconds: f64 = if seconds_parts.len() > 1 {
-        seconds_parts[1].parse().unwrap_or(0.0)
-    } else {
-        0.0
-    };
-
-    hours * 3600.0 + minutes * 60.0 + seconds + milliseconds / 1000.0
-}
