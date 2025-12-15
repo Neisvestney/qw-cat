@@ -1,17 +1,14 @@
+use crate::APP_HANDLE;
 use crate::ffprobe::{get_video_audio_streams_info, pase_duration};
 use crate::select_new_video_file_command::AudioStreamFilePath;
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use ffmpeg_sidecar::command::FfmpegCommand;
 use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
-use std::sync::{Arc};
-use futures::FutureExt;
-use futures::sink::SinkMapErr;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::{oneshot, Mutex, RwLock, MutexGuard};
-use crate::APP_HANDLE;
+use tokio::sync::{Mutex, MutexGuard, RwLock, oneshot};
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -34,9 +31,7 @@ impl FfmpegTask {
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type")]
 pub enum FfmpegTaskStatus {
     Queued,
-    InProgress {
-        progress: f64
-    },
+    InProgress { progress: f64 },
     Finished,
 }
 
@@ -49,22 +44,18 @@ pub enum FfmpegTaskType {
         #[serde(skip)]
         on_complete: Option<oneshot::Sender<FfmpegAudioExtractTaskResult>>,
     },
-    ExportVideo {
-
-    }
+    ExportVideo {},
 }
 
 impl Clone for FfmpegTaskType {
     fn clone(&self) -> Self {
         match self {
-            FfmpegTaskType::ExtractAudio { video_file_path, result, .. } => {
-                FfmpegTaskType::ExtractAudio {
-                    video_file_path: video_file_path.clone(),
-                    result: result.clone(),
-                    on_complete: None,
-                }
+            FfmpegTaskType::ExtractAudio { video_file_path, result, .. } => FfmpegTaskType::ExtractAudio {
+                video_file_path: video_file_path.clone(),
+                result: result.clone(),
+                on_complete: None,
             },
-            FfmpegTaskType::ExportVideo {  } => FfmpegTaskType::ExportVideo {}
+            FfmpegTaskType::ExportVideo {} => FfmpegTaskType::ExportVideo {},
         }
     }
 }
@@ -75,10 +66,7 @@ pub struct FfmpegAudioExtractTaskResult {
 }
 
 impl FfmpegTaskType {
-    pub fn extract_audio(
-        path: String,
-        on_complete: Option<oneshot::Sender<FfmpegAudioExtractTaskResult>>,
-    ) -> Self {
+    pub fn extract_audio(path: String, on_complete: Option<oneshot::Sender<FfmpegAudioExtractTaskResult>>) -> Self {
         Self::ExtractAudio {
             video_file_path: path,
             result: None,
@@ -104,7 +92,7 @@ pub async fn run_next_task(queue: MutexGuard<'_, Vec<Arc<RwLock<FfmpegTask>>>>) 
     let mut first_queued_task = None;
 
     for task in queue.iter() {
-        if matches!(task.read().await.status, FfmpegTaskStatus::InProgress {..}) {
+        if matches!(task.read().await.status, FfmpegTaskStatus::InProgress { .. }) {
             has_in_progress = true;
             break;
         }
@@ -124,19 +112,12 @@ pub async fn run_next_task(queue: MutexGuard<'_, Vec<Arc<RwLock<FfmpegTask>>>>) 
 fn get_audio_file_path(video_file_path: &str, audio_stream_index: i32, format: &str) -> String {
     let tmp_folder = std::env::temp_dir().join("qw-cat");
     std::fs::create_dir_all(&tmp_folder).unwrap();
-    let audio_file_name = format!(
-        "audio_{}_{}.{}",
-        BASE64_STANDARD.encode(video_file_path),
-        audio_stream_index,
-        format
-    );
+    let audio_file_name = format!("audio_{}_{}.{}", BASE64_STANDARD.encode(video_file_path), audio_stream_index, format);
 
-    tmp_folder
-        .join(audio_file_name)
-        .to_string_lossy()
-        .to_string()
+    tmp_folder.join(audio_file_name).to_string_lossy().to_string()
 }
 
+#[allow(clippy::manual_async_fn)] // Recursive async function (Send is not auto implements)
 fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output = ()> + Send {
     async move {
         emit_ffmpeg_queue_status().await;
@@ -146,9 +127,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
         let ffmpeg_task_clone = ffmpeg_task.clone();
 
         match &ffmpeg_task_guard.task_type {
-            FfmpegTaskType::ExtractAudio {
-                video_file_path, ..
-            } => {
+            FfmpegTaskType::ExtractAudio { video_file_path, .. } => {
                 let video_file_path = video_file_path.clone();
                 drop(ffmpeg_task_guard);
                 let ffmpeg_result = tokio::task::spawn_blocking(move || {
@@ -189,12 +168,12 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                                 tokio::spawn(async move {
                                     let mut ffmpeg_task = ffmpeg_task_clone.write().await;
                                     let progress = pase_duration(&p.time) / info.duration;
-                                    ffmpeg_task.status = FfmpegTaskStatus::InProgress {progress};
+                                    ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
                                     drop(ffmpeg_task);
                                     emit_ffmpeg_queue_status().await;
                                     println!("ffmpeg progress: {}%", progress * 100.0);
                                 });
-                            },
+                            }
                             _ => {}
                         });
 
@@ -203,8 +182,8 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                         None
                     }
                 })
-                    .await
-                    .unwrap();
+                .await
+                .unwrap();
 
                 let mut ffmpeg_task = ffmpeg_task.write().await;
                 ffmpeg_task.status = FfmpegTaskStatus::Finished;
@@ -215,8 +194,8 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                     }
                 }
                 drop(ffmpeg_task);
-            },
-            FfmpegTaskType::ExportVideo {  } => todo!()
+            }
+            FfmpegTaskType::ExportVideo {} => todo!(),
         };
 
         emit_ffmpeg_queue_status().await;
@@ -234,30 +213,15 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
     }
 }
 
-pub async fn enqueue_extract_audio_task(
-    queue: &FfmpegTasksQueue,
-    path: String,
-    on_complete: Option<oneshot::Sender<FfmpegAudioExtractTaskResult>>,
-) {
-    enqueue_ffmpeg_task(
-        queue,
-        FfmpegTask::new(FfmpegTaskType::extract_audio(path, on_complete)),
-    )
-    .await;
+pub async fn enqueue_extract_audio_task(queue: &FfmpegTasksQueue, path: String, on_complete: Option<oneshot::Sender<FfmpegAudioExtractTaskResult>>) {
+    enqueue_ffmpeg_task(queue, FfmpegTask::new(FfmpegTaskType::extract_audio(path, on_complete))).await;
 }
-
 
 async fn emit_ffmpeg_queue_status() {
     let app_handle = APP_HANDLE.get().unwrap();
     let queue = app_handle.state::<FfmpegTasksQueue>();
     let queue_lock = queue.lock().await;
-    let tasks = futures::future::join_all(
-        queue_lock
-            .iter()
-            .map(|task| async { task.read().await.clone() })
-    ).await;
+    let tasks = futures::future::join_all(queue_lock.iter().map(|task| async { task.read().await.clone() })).await;
     drop(queue_lock);
-    app_handle
-        .emit("ffmpeg-queue", tasks)
-        .unwrap();
+    app_handle.emit("ffmpeg-queue", tasks).unwrap();
 }

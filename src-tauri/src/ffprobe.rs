@@ -18,7 +18,7 @@ struct FfprobeFormat {
 #[serde(rename_all = "camelCase")]
 struct FfprobeOutput {
     streams: Vec<StreamInfo>,
-    format: FfprobeFormat
+    format: FfprobeFormat,
 }
 
 #[derive(Serialize, Deserialize, TS)]
@@ -30,19 +30,20 @@ pub struct VideoAudioStreamsInfo {
 
 impl VideoAudioStreamsInfo {
     pub fn empty() -> Self {
-        Self { audio_streams: vec![], duration: 0.0 }
+        Self {
+            audio_streams: vec![],
+            duration: 0.0,
+        }
     }
 }
 
 fn parse_ffprobe_output(output: &str) -> Result<VideoAudioStreamsInfo, serde_json::Error> {
     let ffprobe_data: FfprobeOutput = serde_json::from_str(output)?;
-    let audio_streams: Vec<StreamInfo> = ffprobe_data.streams
-        .into_iter()
-        .collect();
+    let audio_streams: Vec<StreamInfo> = ffprobe_data.streams.into_iter().collect();
 
     Ok(VideoAudioStreamsInfo {
         audio_streams,
-        duration: ffprobe_data.format.duration.parse::<f64>().unwrap_or(0.0)
+        duration: ffprobe_data.format.duration.parse::<f64>().unwrap_or(0.0),
     })
 }
 

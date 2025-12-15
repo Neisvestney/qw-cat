@@ -1,11 +1,11 @@
+mod ffmpeg;
 mod ffprobe;
 mod select_new_video_file_command;
-mod ffmpeg;
 
-use std::sync::OnceLock;
-use tauri::{generate_handler, AppHandle};
 use crate::ffmpeg::create_ffmpeg_tasks_queue;
 use crate::select_new_video_file_command::select_new_video_file;
+use std::sync::OnceLock;
+use tauri::{AppHandle, generate_handler};
 
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 

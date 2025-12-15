@@ -1,13 +1,12 @@
-use serde::{Deserialize, Serialize};
-use tauri::ipc::Channel;
-use tauri::Manager;
-use tauri_plugin_dialog::{DialogExt, FilePath};
-use tauri_plugin_dialog::MessageDialogResult::No;
-use tokio::sync::oneshot;
-use ts_rs::TS;
-use crate::ffmpeg::{enqueue_extract_audio_task, FfmpegAudioExtractTaskResult, FfmpegTasksQueue};
+use crate::ffmpeg::{FfmpegTasksQueue, enqueue_extract_audio_task};
 use crate::ffprobe;
 use crate::ffprobe::VideoAudioStreamsInfo;
+use serde::{Deserialize, Serialize};
+use tauri::Manager;
+use tauri::ipc::Channel;
+use tauri_plugin_dialog::{DialogExt, FilePath};
+use tokio::sync::oneshot;
+use ts_rs::TS;
 
 #[derive(Deserialize, Serialize, TS)]
 pub struct SelectedVideoFile {
@@ -26,12 +25,8 @@ pub struct AudioStreamFilePath {
 #[ts(export)]
 pub enum SelectNewVideoFileEvent {
     VideoFilePicked,
-    VideoFileInfoReady {
-        video_file: Option<SelectedVideoFile>,
-    },
-    VideoAudioSteamsReady {
-        audio_streams: Vec<AudioStreamFilePath>,
-    },
+    VideoFileInfoReady { video_file: Option<SelectedVideoFile> },
+    VideoAudioSteamsReady { audio_streams: Vec<AudioStreamFilePath> },
 }
 
 #[tauri::command]
@@ -44,19 +39,30 @@ pub async fn select_new_video_file(app_handle: tauri::AppHandle, on_event: Chann
 
         let path = path.to_string();
         let audio_steams = ffprobe::get_video_audio_streams_info(&path).unwrap_or(VideoAudioStreamsInfo::empty());
-        let selected_video_file = Some(SelectedVideoFile { path: path.clone(), audio_steams });
+        let selected_video_file = Some(SelectedVideoFile {
+            path: path.clone(),
+            audio_steams,
+        });
 
         let ffmpeg_tasks_queue = app_handle.state::<FfmpegTasksQueue>();
         let (tx, rx) = oneshot::channel();
         enqueue_extract_audio_task(ffmpeg_tasks_queue.inner(), path, Some(tx)).await;
 
-        on_event.send(SelectNewVideoFileEvent::VideoFileInfoReady {video_file: selected_video_file}).unwrap();
+        on_event
+            .send(SelectNewVideoFileEvent::VideoFileInfoReady {
+                video_file: selected_video_file,
+            })
+            .unwrap();
 
         if let Ok(result) = rx.await {
-            on_event.send(SelectNewVideoFileEvent::VideoAudioSteamsReady {audio_streams: result.audio_streams}).unwrap();
+            on_event
+                .send(SelectNewVideoFileEvent::VideoAudioSteamsReady {
+                    audio_streams: result.audio_streams,
+                })
+                .unwrap();
         }
     } else {
-        on_event.send(SelectNewVideoFileEvent::VideoFileInfoReady {video_file: None}).unwrap();
+        on_event.send(SelectNewVideoFileEvent::VideoFileInfoReady { video_file: None }).unwrap();
     }
 }
 
