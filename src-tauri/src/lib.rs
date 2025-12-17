@@ -5,10 +5,12 @@ mod ffmpeg_time_duration;
 mod ffmpeg_export_command;
 mod handle_main_window_event;
 
+use std::str::FromStr;
 use crate::ffmpeg::create_ffmpeg_tasks_queue;
 use crate::select_new_video_file_command::select_new_video_file;
 use std::sync::OnceLock;
 use tauri::{AppHandle, generate_handler, Manager};
+use tauri::window::{Color, ProgressBarState, ProgressBarStatus};
 use crate::ffmpeg_export_command::ffmpeg_export;
 use crate::handle_main_window_event::handle_main_window_event;
 
@@ -24,6 +26,8 @@ pub fn run() {
 
             let main_window = app.get_webview_window("main").unwrap();
             main_window.on_window_event(handle_main_window_event);
+
+            main_window.set_background_color(Color::from_str("#000000").ok())?;
 
             Ok(())
         })

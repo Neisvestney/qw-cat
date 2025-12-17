@@ -256,7 +256,7 @@ const VideoView = observer(() => {
                 label="Bitrate"
                 placeholder="Auto"
                 fullWidth
-                value={appStateStore.currentVideo.exportBitrateKbps}
+                value={appStateStore.currentVideo.exportBitrateKbps ?? ""}
                 onChange={(e) => appStateStore.currentVideo?.setExportBitrateKbps(e.target.value ? parseInt(e.target.value) : null)}
                 helperText={appStateStore.currentVideo.exportBitrateKbps && `Estimated file size ${appStateStore.currentVideo.estimatedVideoSizeMb}Mb`}
                 slotProps={{
@@ -272,7 +272,7 @@ const VideoView = observer(() => {
                 label="Framerate"
                 placeholder="Auto"
                 fullWidth
-                value={appStateStore.currentVideo.exportFrameRate}
+                value={appStateStore.currentVideo.exportFrameRate ?? ""}
                 onChange={(e) => appStateStore.currentVideo?.setExportFrameRate(e.target.value ? parseInt(e.target.value) : null)}
                 slotProps={{
                   input: {

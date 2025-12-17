@@ -6,11 +6,12 @@ use crate::APP_HANDLE;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use ffmpeg_sidecar::command::FfmpegCommand;
-use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
+use ffmpeg_sidecar::event::{FfmpegEvent, FfmpegProgress, LogLevel};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
+use tauri::window::{ProgressBarState, ProgressBarStatus};
 use tokio::sync::{oneshot, Mutex, MutexGuard, RwLock};
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS, Clone)]
@@ -148,6 +149,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
         }
 
         emit_ffmpeg_queue_status().await;
+        set_main_window_progress_bar(Some(0.0));
 
         let ffmpeg_task_guard = ffmpeg_task.read().await;
 
@@ -191,18 +193,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                                 println!("Error while running ffmpeg: {e}")
                             }
                             FfmpegEvent::Progress(p) => {
-                                let ffmpeg_task_clone = ffmpeg_task_clone.clone();
-                                tokio::spawn(async move {
-                                    let mut ffmpeg_task = ffmpeg_task_clone.write().await;
-                                    let progress = FfmpegTimeDuration::from_str(&p.time)
-                                        .map(FfmpegTimeDuration::as_seconds)
-                                        .unwrap_or_default()
-                                        / info.duration;
-                                    ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
-                                    drop(ffmpeg_task);
-                                    emit_ffmpeg_queue_status().await;
-                                    println!("ffmpeg progress: {}%", progress * 100.0);
-                                });
+                                handle_ffmpeg_progress(p, &ffmpeg_task_clone, info.duration);
                             }
                             _ => {}
                         });
@@ -316,20 +307,11 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             FfmpegEvent::Log(LogLevel::Error, e) => {
                                 println!("Error while running ffmpeg: {e}")
                             }
+                            FfmpegEvent::Log(log_level, s) => {
+                                println!("Ffmpeg log [{log_level:?}]: {s}")
+                            }
                             FfmpegEvent::Progress(p) => {
-                                let ffmpeg_task_clone = ffmpeg_task_clone.clone();
-                                println!("ffmpeg progress {:?}", p);
-                                tokio::spawn(async move {
-                                    let mut ffmpeg_task = ffmpeg_task_clone.write().await;
-                                    let progress = FfmpegTimeDuration::from_str(&p.time)
-                                        .map(FfmpegTimeDuration::as_seconds)
-                                        .unwrap_or_default()
-                                        / (options.end_time - options.start_time);
-                                    ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
-                                    drop(ffmpeg_task);
-                                    emit_ffmpeg_queue_status().await;
-                                    // println!("ffmpeg progress: {}%", progress * 100.0);
-                                });
+                                handle_ffmpeg_progress(p, &ffmpeg_task_clone, options.end_time - options.start_time);
                             }
                             _ => {}
                         });
@@ -356,17 +338,13 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
         };
 
         emit_ffmpeg_queue_status().await;
+        set_main_window_progress_bar(None);
 
         let app_handle = APP_HANDLE.get().unwrap();
         let queue = app_handle.state::<FfmpegTasksQueue>();
         let queue_lock = queue.lock().await;
 
         run_next_task(queue_lock).await;
-
-        // tokio::spawn(async move {
-        //
-        //     run_next_task(queue_lock).await;
-        // });
     }
 }
 
@@ -385,4 +363,46 @@ async fn emit_ffmpeg_queue_status() {
     let tasks = futures::future::join_all(queue_lock.iter().map(|task| async { task.read().await.clone() })).await;
     drop(queue_lock);
     app_handle.emit("ffmpeg-queue", tasks).unwrap();
+}
+
+fn handle_ffmpeg_progress(p: FfmpegProgress, ffmpeg_task: &Arc<RwLock<FfmpegTask>>, total_duration: f64) {
+    let ffmpeg_task_clone = ffmpeg_task.clone();
+    println!("ffmpeg progress {:?}", p);
+    tokio::spawn(async move {
+        let mut ffmpeg_task = ffmpeg_task_clone.write().await;
+        let progress = FfmpegTimeDuration::from_str(&p.time)
+            .map(FfmpegTimeDuration::as_seconds)
+            .unwrap_or_default()
+            / total_duration;
+        ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
+        drop(ffmpeg_task);
+        emit_ffmpeg_queue_status().await;
+        set_main_window_progress_bar(Some(progress));
+        // println!("ffmpeg progress: {}%", progress * 100.0);
+    });
+}
+
+
+fn set_main_window_progress_bar(progress: Option<f64>) {
+    let app_handle = APP_HANDLE.get().unwrap();
+    let main_window = app_handle.get_webview_window("main").unwrap();
+
+    if let Some(progress) = progress {
+        if progress != 0.0 {
+            main_window.set_progress_bar(ProgressBarState {
+                status: Some(ProgressBarStatus::Normal),
+                progress: Some((progress * 100.0) as u64),
+            }).unwrap();
+        } else {
+            main_window.set_progress_bar(ProgressBarState {
+                status: Some(ProgressBarStatus::Indeterminate),
+                progress: None,
+            }).unwrap();
+        }
+    } else {
+        main_window.set_progress_bar(ProgressBarState {
+            status: Some(ProgressBarStatus::None),
+            progress: None,
+        }).unwrap();
+    }
 }
