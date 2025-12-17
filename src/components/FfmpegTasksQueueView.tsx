@@ -4,7 +4,7 @@ import {AppStateStoreContext} from "../stores/AppStateStore.ts";
 import {
   Avatar,
   Box,
-  Button,
+  Button, CircularProgress,
   Divider,
   Drawer,
   IconButton,
@@ -19,11 +19,13 @@ import {
 } from "@mui/material";
 import DeleteIcon from '@mui/icons-material/Delete';
 import FolderIcon from '@mui/icons-material/Folder';
-import AudioFileIcon from "@mui/icons-material/AudioFile";
-import VideoFileIcon from "@mui/icons-material/VideoFile";
+import AudiotrackIcon from "@mui/icons-material/Audiotrack";
+import VideocamIcon from "@mui/icons-material/Videocam";
 import {FfmpegTask} from "../generated/bindings/FfmpegTask.ts";
 import CircularProgressWithLabel from "./ui/CircularProgressWithLabel.tsx";
 import {green, blue} from "@mui/material/colors";
+import {revealItemInDir} from '@tauri-apps/plugin-opener';
+import {Audiotrack} from "@mui/icons-material";
 
 const getFfmpegTaskLabel = (ffmpegTask: FfmpegTask | null) => {
   if (!ffmpegTask) return "No tasks running";
@@ -47,13 +49,21 @@ const getTaskView = (ffmpegTask: FfmpegTask) => {
           "finished": "Audio prepared",
         }[ffmpegTask.status.type],
         secondary: `${ffmpegTask.taskType.videoFilePath}`,
-        icon: <AudioFileIcon/>,
+        icon: <AudiotrackIcon/>,
+        onClick: null,
       }
     case "exportVideo":
+      const outputPath = ffmpegTask.taskType.options.outputPath;
+
       return{
-        label: "Exporting video",
-        secondary: "",
-        icon: <VideoFileIcon/>,
+        label: {
+          "queued": "Video export queued",
+          "inProgress": "Exporting video",
+          "finished": "Video exported",
+        }[ffmpegTask.status.type],
+        secondary: outputPath,
+        icon: <VideocamIcon/>,
+        onClick: () => revealItemInDir(outputPath)
       }
   }
 }
@@ -67,29 +77,40 @@ const FfmpegTasksQueueView = observer(() => {
   const DrawerList = (
     <Box sx={{width: 500}} role="presentation">
       <List>
-        {appStateStore.ffmpegTasksQueue.ffmpegTasks.slice().reverse().map((ffmpegTask, index) =>
-          <ListItem
-            secondaryAction={
-              <Stack direction={"row"} spacing={1}>
-                {ffmpegTask.status.type == "inProgress" &&
-                    <CircularProgressWithLabel value={ffmpegTask.status.progress * 100}/>
-                }
-                {/*<IconButton edge="end" aria-label="delete">*/}
-                {/*  <DeleteIcon/>*/}
-                {/*</IconButton>*/}
-              </Stack>
-            }
-          >
-            <ListItemAvatar>
-              <Avatar sx={{ bgcolor: taskStatusColors[ffmpegTask.status.type] }}>
-                {getTaskView(ffmpegTask).icon}
-              </Avatar>
-            </ListItemAvatar>
-            <ListItemText
-              primary={getTaskView(ffmpegTask).label}
-              secondary={getTaskView(ffmpegTask).secondary}
-            />
-          </ListItem>
+        {appStateStore.ffmpegTasksQueue.ffmpegTasks.slice().reverse().map((ffmpegTask, index) => {
+            const ItemBody = <>
+              <ListItemAvatar>
+                <Avatar sx={{bgcolor: taskStatusColors[ffmpegTask.status.type]}}>
+                  {getTaskView(ffmpegTask).icon}
+                </Avatar>
+              </ListItemAvatar>
+              <ListItemText
+                primary={getTaskView(ffmpegTask).label}
+                secondary={getTaskView(ffmpegTask).secondary}
+              />
+            </>
+
+            return <ListItem
+              sx={{padding: getTaskView(ffmpegTask).onClick ? 0 : 1}}
+              secondaryAction={
+                <Stack direction={"row"} spacing={1}>
+                  {ffmpegTask.status.type == "inProgress" &&
+                    (ffmpegTask.status.progress != 0
+                      ? <CircularProgressWithLabel value={ffmpegTask.status.progress * 100}/>
+                      : <CircularProgress size={30}/>)
+                  }
+                  {/*<IconButton edge="end" aria-label="delete">*/}
+                  {/*  <DeleteIcon/>*/}
+                  {/*</IconButton>*/}
+                </Stack>
+              }
+            >
+              {getTaskView(ffmpegTask).onClick
+                ? <ListItemButton sx={{padding: 1}} onClick={getTaskView(ffmpegTask).onClick ?? undefined}>{ItemBody}</ListItemButton>
+                : ItemBody
+              }
+            </ListItem>;
+          }
         )}
       </List>
     </Box>
@@ -107,7 +128,9 @@ const FfmpegTasksQueueView = observer(() => {
       message={getFfmpegTaskLabel(ffmpegTask)}
       action={<>
         {ffmpegTask && ffmpegTask.status.type == "inProgress" &&
-            <CircularProgressWithLabel value={ffmpegTask.status.progress * 100}/>
+          (ffmpegTask.status.progress != 0
+            ? <CircularProgressWithLabel value={ffmpegTask.status.progress * 100}/>
+            : <CircularProgress size={30}/>)
         }
       </>}
       slotProps={{

@@ -51,6 +51,10 @@ class AppStateStore {
     await selectNewVideoFile({onEvent: onEvent as Channel<any>})
   }
 
+  closeCurrentVideo() {
+    this.currentVideo = null;
+  }
+
   constructor() {
     makeAutoObservable(this, {}, {autoBind: true})
   }

@@ -6,6 +6,7 @@ import {css} from '@emotion/react';
 import {convertFileSrc} from "@tauri-apps/api/core";
 import format from 'format-duration';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {toJS} from "mobx";
 import {useSyncedMediaTracks} from "../lib/useSyncedMediaTracks.ts";
 import FolderIcon from "@mui/icons-material/Folder";
@@ -51,6 +52,7 @@ const VideoView = observer(() => {
   const appStateStore = useContext(AppStateStoreContext)
   const videoElement = useRef<HTMLVideoElement>(null)
   const [exportModalOpen, setExportModalOpen] = useState(false)
+  const [backConfirmation, setBackConfirmation] = useState(false);
 
   const audioUrls = useMemo(
     () => (appStateStore.currentVideo?.audioStreamsFilePaths ?? []).map(x => convertFileSrc(x.path)),
@@ -69,6 +71,13 @@ const VideoView = observer(() => {
     const defaultAudioStreamEnabled = appStateStore.currentVideo.activeAudioStreamIndexes.includes(appStateStore.currentVideo.defaultAudioStreamIndex)
     videoElement.current.volume = defaultAudioStreamEnabled ? 1 : 0
   }, [toJS(appStateStore.currentVideo?.activeAudioStreamIndexes)]);
+
+  useEffect(() => {
+    if (backConfirmation) {
+      const t = setTimeout(() => setBackConfirmation(false), 2000)
+      return () => clearTimeout(t)
+    }
+  }, [backConfirmation]);
 
   if (!appStateStore.currentVideo) return;
 
@@ -94,6 +103,14 @@ const VideoView = observer(() => {
   const handleExportModalSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     handleExportModalClose()
+    console.log("Exporting video...")
+    appStateStore.currentVideo?.exportVideo()
+  }
+
+  const handleBackClicked = () => {
+    if (!backConfirmation) {setBackConfirmation(true); return}
+
+    appStateStore.closeCurrentVideo()
   }
 
   const handleClickSelectExportPath = async () => {
@@ -139,21 +156,26 @@ const VideoView = observer(() => {
       disableSwap
     />
     <AdditionalButtons>
-      <ButtonGroup color="primary">
+      <Stack direction={"row"} spacing={1}>
         <Button
+          variant={"outlined"}
           disabled={appStateStore.currentVideo.startHereDisabled}
           onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handleStartHere()}
         >
           Start Here
         </Button>
         <Button
+          variant={"outlined"}
           disabled={appStateStore.currentVideo.endHereDisabled}
           onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handleEndHere()}
         >
           End Here
         </Button>
-      </ButtonGroup>
-      <Button variant={"contained"} endIcon={<FileUploadIcon/>} onClick={handleExportClicked}>Export</Button>
+      </Stack>
+      <Stack direction={"row"} spacing={1}>
+        <Button variant={"outlined"} startIcon={<ArrowBackIcon/>} color={backConfirmation ? "error" : "info"} onClick={handleBackClicked}>{backConfirmation ? "Are you sure?" : "Back"}</Button>
+        <Button variant={"outlined"} endIcon={<FileUploadIcon/>} color={"success"} onClick={handleExportClicked}>Export</Button>
+      </Stack>
     </AdditionalButtons>
     <FormGroup>
       {appStateStore.currentVideo.audioStreamsInfo.audioStreams.map((audioStream, index) => {
@@ -205,7 +227,7 @@ const VideoView = observer(() => {
                 }}
               />
             </Grid>
-            <Grid size={4}>
+            <Grid size={3}>
               <TextField
                 select
                 fullWidth
@@ -220,7 +242,7 @@ const VideoView = observer(() => {
                 ))}
               </TextField>
             </Grid>
-            <Grid size={4}>
+            <Grid size={3}>
               <Autocomplete
                 freeSolo
                 options={VIDEO_RESOLUTIONS}
@@ -229,7 +251,7 @@ const VideoView = observer(() => {
                 renderInput={(params) => <TextField {...params} required fullWidth label="Resolution" />}
               />
             </Grid>
-            <Grid size={4}>
+            <Grid size={3}>
               <TextField
                 label="Bitrate"
                 placeholder="Auto"
@@ -241,6 +263,21 @@ const VideoView = observer(() => {
                   input: {
                     type: "number",
                     endAdornment: <InputAdornment position="end">kBit/s</InputAdornment>,
+                  },
+                }}
+              />
+            </Grid>
+            <Grid size={3}>
+              <TextField
+                label="Framerate"
+                placeholder="Auto"
+                fullWidth
+                value={appStateStore.currentVideo.exportFrameRate}
+                onChange={(e) => appStateStore.currentVideo?.setExportFrameRate(e.target.value ? parseInt(e.target.value) : null)}
+                slotProps={{
+                  input: {
+                    type: "number",
+                    endAdornment: <InputAdornment position="end">fps</InputAdornment>,
                   },
                 }}
               />

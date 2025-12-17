@@ -1,15 +1,17 @@
-use crate::APP_HANDLE;
-use crate::ffprobe::{get_video_audio_streams_info};
+use crate::ffmpeg_export_command::ExportOptions;
+use crate::ffmpeg_time_duration::FfmpegTimeDuration;
+use crate::ffprobe::get_video_audio_streams_info;
 use crate::select_new_video_file_command::AudioStreamFilePath;
-use base64::Engine;
+use crate::APP_HANDLE;
 use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use ffmpeg_sidecar::command::FfmpegCommand;
 use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
-use tokio::sync::{Mutex, MutexGuard, RwLock, oneshot};
-use crate::ffmpeg_time_duration::FfmpegTimeDuration;
+use tokio::sync::{oneshot, Mutex, MutexGuard, RwLock};
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -45,18 +47,28 @@ pub enum FfmpegTaskType {
         #[serde(skip)]
         on_complete: Option<oneshot::Sender<FfmpegAudioExtractTaskResult>>,
     },
-    ExportVideo {},
+    ExportVideo {
+        options: ExportOptions,
+        result: Option<FfmpegExportVideoTaskResult>,
+    },
 }
 
 impl Clone for FfmpegTaskType {
     fn clone(&self) -> Self {
         match self {
-            FfmpegTaskType::ExtractAudio { video_file_path, result, .. } => FfmpegTaskType::ExtractAudio {
+            FfmpegTaskType::ExtractAudio {
+                video_file_path,
+                result,
+                on_complete: _on_complete,
+            } => FfmpegTaskType::ExtractAudio {
                 video_file_path: video_file_path.clone(),
                 result: result.clone(),
                 on_complete: None,
             },
-            FfmpegTaskType::ExportVideo {} => FfmpegTaskType::ExportVideo {},
+            FfmpegTaskType::ExportVideo { options, result } => FfmpegTaskType::ExportVideo {
+                options: options.clone(),
+                result: result.clone(),
+            },
         }
     }
 }
@@ -66,6 +78,11 @@ pub struct FfmpegAudioExtractTaskResult {
     pub audio_streams: Vec<AudioStreamFilePath>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, ts_rs::TS)]
+pub struct FfmpegExportVideoTaskResult {
+    pub output_path: String,
+}
+
 impl FfmpegTaskType {
     pub fn extract_audio(path: String, on_complete: Option<oneshot::Sender<FfmpegAudioExtractTaskResult>>) -> Self {
         Self::ExtractAudio {
@@ -73,6 +90,10 @@ impl FfmpegTaskType {
             result: None,
             on_complete,
         }
+    }
+
+    pub fn export_video(options: ExportOptions) -> Self {
+        Self::ExportVideo { options, result: None }
     }
 }
 
@@ -121,6 +142,11 @@ fn get_audio_file_path(video_file_path: &str, audio_stream_index: i32, format: &
 #[allow(clippy::manual_async_fn)] // Recursive async function (Send is not auto implements)
 fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output = ()> + Send {
     async move {
+        {
+            let mut ffmpeg_task_guard = ffmpeg_task.write().await;
+            ffmpeg_task_guard.status = FfmpegTaskStatus::InProgress { progress: 0.0 };
+        }
+
         emit_ffmpeg_queue_status().await;
 
         let ffmpeg_task_guard = ffmpeg_task.read().await;
@@ -168,7 +194,10 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                                 let ffmpeg_task_clone = ffmpeg_task_clone.clone();
                                 tokio::spawn(async move {
                                     let mut ffmpeg_task = ffmpeg_task_clone.write().await;
-                                    let progress = FfmpegTimeDuration::from_str(&p.time).unwrap().as_seconds() / info.duration;
+                                    let progress = FfmpegTimeDuration::from_str(&p.time)
+                                        .map(FfmpegTimeDuration::as_seconds)
+                                        .unwrap_or_default()
+                                        / info.duration;
                                     ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
                                     drop(ffmpeg_task);
                                     emit_ffmpeg_queue_status().await;
@@ -196,7 +225,134 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                 }
                 drop(ffmpeg_task);
             }
-            FfmpegTaskType::ExportVideo {} => todo!(),
+            FfmpegTaskType::ExportVideo { options, .. } => {
+                let options = options.clone();
+                drop(ffmpeg_task_guard);
+
+                let ffmpeg_result = tokio::task::spawn_blocking(move || {
+                    let app_handle = APP_HANDLE.get().unwrap();
+                    if !app_handle.asset_protocol_scope().is_allowed(&options.input_path) {
+                        return None;
+                    }
+
+                    let info = get_video_audio_streams_info(&options.input_path);
+                    if let Some(info) = info {
+                        let scale = if let Some(resolution) = options.resolution {
+                            Cow::Owned(format!(",scale={}", resolution))
+                        } else {
+                            Cow::Borrowed("")
+                        };
+
+                        let video_filter = format!(
+                            "[0:v]trim=start={}:end={},setpts=PTS-STARTPTS{}[v]",
+                            options.start_time, options.end_time, scale
+                        );
+
+                        let audio_filter = if !options.active_audio_stream_indexes.is_empty() {
+                            let audio_streams_trim = options
+                                .active_audio_stream_indexes
+                                .iter()
+                                .map(|stream_index| {
+                                    format!(
+                                        "[0:{}]atrim=start={}:end={},asetpts=PTS-STARTPTS[a{}];",
+                                        stream_index, options.start_time, options.end_time, stream_index
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                                .join("");
+
+                            let audio_streams = options
+                                .active_audio_stream_indexes
+                                .iter()
+                                .map(|stream_index| format!("[a{}]", stream_index))
+                                .collect::<Vec<_>>()
+                                .join("");
+
+                            format!(
+                                "{}{}amix=inputs={}[a]",
+                                audio_streams_trim,
+                                audio_streams,
+                                options.active_audio_stream_indexes.len()
+                            )
+                        } else {
+                            // Generate silence
+                            format!(
+                                "aevalsrc=0:d={}[a]",
+                                options.end_time - options.start_time
+                            )
+                        };
+
+
+                        let mut ffmpeg_command = FfmpegCommand::new();
+
+                        ffmpeg_command
+                            .input(&options.input_path)
+                            .overwrite()
+                            .filter_complex(format!("{};{}", video_filter, audio_filter))
+                            //.filter_complex(format!("\"{}\"", audio_filter))
+                            .map("[v]")
+                            .map("[a]");
+
+                        if let Some(codec) = options.codec {
+                            ffmpeg_command.codec_video(codec);
+                        }
+
+                        if let Some(bitrate) = options.bitrate {
+                            ffmpeg_command.args(vec!["-b:v", &bitrate]);
+                        }
+
+                        if let Some(frame_rate) = options.frame_rate {
+                            ffmpeg_command.arg("-r");
+                            ffmpeg_command.arg(frame_rate.to_string().as_str());
+                        }
+
+                        ffmpeg_command.preset("medium").output(&options.output_path);
+
+                        println!("Running ffmpeg command: {:?}", ffmpeg_command);
+
+                        let mut ffmpeg_child = ffmpeg_command.spawn().unwrap();
+
+                        ffmpeg_child.iter().unwrap().for_each(|e| match e {
+                            FfmpegEvent::Log(LogLevel::Error, e) => {
+                                println!("Error while running ffmpeg: {e}")
+                            }
+                            FfmpegEvent::Progress(p) => {
+                                let ffmpeg_task_clone = ffmpeg_task_clone.clone();
+                                println!("ffmpeg progress {:?}", p);
+                                tokio::spawn(async move {
+                                    let mut ffmpeg_task = ffmpeg_task_clone.write().await;
+                                    let progress = FfmpegTimeDuration::from_str(&p.time)
+                                        .map(FfmpegTimeDuration::as_seconds)
+                                        .unwrap_or_default()
+                                        / (options.end_time - options.start_time);
+                                    ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
+                                    drop(ffmpeg_task);
+                                    emit_ffmpeg_queue_status().await;
+                                    // println!("ffmpeg progress: {}%", progress * 100.0);
+                                });
+                            }
+                            _ => {}
+                        });
+
+                        let result = FfmpegExportVideoTaskResult {
+                            output_path: options.output_path.clone(),
+                        };
+
+                        Some(result)
+                    } else {
+                        None
+                    }
+                })
+                .await
+                .unwrap();
+
+                let mut ffmpeg_task = ffmpeg_task.write().await;
+                ffmpeg_task.status = FfmpegTaskStatus::Finished;
+                if let FfmpegTaskType::ExportVideo { result, .. } = &mut ffmpeg_task.task_type {
+                    *result = ffmpeg_result.clone();
+                }
+                drop(ffmpeg_task);
+            }
         };
 
         emit_ffmpeg_queue_status().await;
@@ -216,6 +372,10 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
 
 pub async fn enqueue_extract_audio_task(queue: &FfmpegTasksQueue, path: String, on_complete: Option<oneshot::Sender<FfmpegAudioExtractTaskResult>>) {
     enqueue_ffmpeg_task(queue, FfmpegTask::new(FfmpegTaskType::extract_audio(path, on_complete))).await;
+}
+
+pub async fn enqueue_export_video_task(queue: &FfmpegTasksQueue, options: ExportOptions) {
+    enqueue_ffmpeg_task(queue, FfmpegTask::new(FfmpegTaskType::export_video(options))).await;
 }
 
 async fn emit_ffmpeg_queue_status() {

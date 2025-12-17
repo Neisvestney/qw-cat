@@ -28,15 +28,19 @@ const MILLIS_PER_SEC: f64 = 1_000.0;
 ///
 /// # Examples
 ///
-/// ```
-///  let second = FfmpegTimeDuration::from_str("00:00:01").unwrap();
-///  let hundred_milliseconds = FfmpegTimeDuration::from_str("100ms").unwrap();
+/// ```rust
+/// use ffmpeg_sidecar::ffmpeg_time_duration::FfmpegTimeDuration;
+/// use ffmpeg_sidecar::command::FfmpegCommand;
 ///
-///  assert_eq!(second.as_seconds(), 1f64);
-///  assert_eq!(hundred_milliseconds.as_seconds(), 0.1f64);
+/// let second = FfmpegTimeDuration::from_str("00:00:01").unwrap();
+/// let hundred_milliseconds = FfmpegTimeDuration::from_str("100ms").unwrap();
 ///
-///  FfmpegCommand::new()
-///     .arg(second.to_string());
+/// assert_eq!(second.as_seconds(), 1.0);
+/// assert_eq!(hundred_milliseconds.as_seconds(), 0.1);
+///
+/// FfmpegCommand::new()
+///    .arg("-ss")
+///    .arg(second.to_string());
 /// ```
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug)]
 pub struct FfmpegTimeDuration(i64);
@@ -62,7 +66,7 @@ impl FfmpegTimeDuration {
 
     #[must_use]
     #[inline]
-    pub fn as_seconds(&self) -> f64 {
+    pub fn as_seconds(self) -> f64 {
         self.0 as f64 / MICROS_PER_SEC
     }
 
@@ -136,16 +140,34 @@ impl FfmpegTimeDuration {
     pub fn from_duration(duration: Duration) -> Self {
         Self::from_micros(duration.as_micros() as i64)
     }
+
+    /// Returns a string representation of the duration in microseconds with "us" suffix.
+    #[must_use]
+    #[inline]
+    pub fn to_alt_string(&self) -> String {
+        format!("{:#}", self)
+    }
 }
 
 impl fmt::Display for FfmpegTimeDuration {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let seconds = self.as_seconds();
-        let hours = (seconds / 3600.0).floor() as i64;
-        let minutes = ((seconds / 60.0) % 60.0).floor() as i64;
-        let seconds = (seconds % 60.0).floor();
+        if !f.alternate() {
+            let seconds = self.as_seconds();
+            let is_negative = seconds < 0.0;
+            let abs_seconds = seconds.abs();
 
-        write!(f, "{:02}:{:02}:{:06.3}", hours, minutes, seconds)
+            let hours = (abs_seconds / 3600.0).floor() as i64;
+            let minutes = ((abs_seconds / 60.0) % 60.0).floor() as i64;
+            let secs = abs_seconds % 60.0;
+
+            if is_negative {
+                write!(f, "-{:02}:{:02}:{:06.3}", hours, minutes, secs)
+            } else {
+                write!(f, "{:02}:{:02}:{:06.3}", hours, minutes, secs)
+            }
+        } else {
+            write!(f, "{}us", self.as_micros())
+        }
     }
 }
 

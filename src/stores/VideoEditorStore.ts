@@ -4,6 +4,8 @@ import {AudioStreamFilePath} from "../generated/bindings/AudioStreamFilePath.ts"
 import addPostfixToFilename from "../lib/addPostfixToFilename.ts";
 import replaceExtension from "../lib/replaceExtension.ts";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
+import {ffmpegExport} from "../generated";
+import theme from "../theme.ts";
 
 const MINIMAL_SECONDS_DIFF = 1
 
@@ -106,6 +108,26 @@ class VideoEditorStore {
   exportBitrateKbps: number | null = null
   setExportBitrateKbps(bitrateKbps: number | null) {
     this.exportBitrateKbps = bitrateKbps;
+  }
+
+  exportFrameRate: number | null = 60
+  setExportFrameRate(exportFrameRate: number | null) {
+    this.exportFrameRate = exportFrameRate;
+  }
+
+  async exportVideo() {
+    await ffmpegExport({
+      options: {
+        inputPath: this.path,
+        outputPath: this.exportPath,
+        startTime: this.trimStart ?? 0,
+        endTime: this.trimEnd ?? 0,
+        bitrate: this.exportBitrateKbps ? `${this.exportBitrateKbps}k` : null,
+        resolution: this.exportResolution.replace("x", ":"),
+        frameRate: this.exportFrameRate,
+        activeAudioStreamIndexes: this.activeAudioStreamIndexes,
+      }
+    })
   }
 
   constructor(path: string, videoAudioStreamsInfo: VideoAudioStreamsInfo = {audioStreams: [], duration: 0}) {
