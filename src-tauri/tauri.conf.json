@@ -10,9 +10,10 @@
     },
     "windows": [
       {
-        "height": 750,
         "title": "Qw Cat",
-        "width": 1000
+        "height": 750,
+        "width": 1000,
+        "backgroundColor": "#121212"
       }
     ]
   },

@@ -1,6 +1,22 @@
+use std::process::Command;
 use ffmpeg_sidecar::ffprobe::{ffprobe_is_installed, ffprobe_path};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+
+pub(crate) trait BackgroundCommand {
+    fn create_no_window(&mut self) -> &mut Self;
+}
+
+impl BackgroundCommand for Command {
+    /// Disable creating a new console window for the spawned process on Windows.
+    /// Has no effect on other platforms. This can be useful when spawning a command
+    /// from a GUI program.
+    fn create_no_window(&mut self) -> &mut Self {
+        #[cfg(target_os = "windows")]
+        std::os::windows::process::CommandExt::creation_flags(self, 0x08000000);
+        self
+    }
+}
 
 #[derive(Serialize, Deserialize, TS)]
 pub struct StreamInfo {
@@ -56,6 +72,7 @@ pub fn get_video_audio_streams_info(path: impl AsRef<str>) -> Option<VideoAudioS
     }
 
     let output = std::process::Command::new(ffprobe_path)
+        .create_no_window()
         .args([
             "-v", "quiet",
             "-print_format", "json",
@@ -80,6 +97,7 @@ pub fn get_video_streams_info(path: impl AsRef<str>) -> Option<FfprobeOutput> {
     }
 
     let output = std::process::Command::new(ffprobe_path)
+        .create_no_window()
         .args([
             "-v", "quiet",
             "-print_format", "json",

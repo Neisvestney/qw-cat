@@ -92,7 +92,7 @@ const FfmpegTasksQueueView = observer(() => {
 
             return <ListItem
               sx={{padding: getTaskView(ffmpegTask).onClick ? 0 : 1}}
-              ley={index}
+              key={index}
               secondaryAction={
                 <Stack direction={"row"} spacing={1}>
                   {ffmpegTask.status.type == "inProgress" &&
