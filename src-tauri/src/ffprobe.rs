@@ -3,22 +3,22 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 #[derive(Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
 pub struct StreamInfo {
     pub index: i32,
+    pub codec_name: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FfprobeFormat {
-    duration: String,
+    pub duration: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct FfprobeOutput {
-    streams: Vec<StreamInfo>,
-    format: FfprobeFormat,
+pub struct FfprobeOutput {
+    pub streams: Vec<StreamInfo>,
+    pub format: FfprobeFormat,
 }
 
 #[derive(Serialize, Deserialize, TS)]
@@ -38,7 +38,8 @@ impl VideoAudioStreamsInfo {
 }
 
 fn parse_ffprobe_output(output: &str) -> Result<VideoAudioStreamsInfo, serde_json::Error> {
-    let ffprobe_data: FfprobeOutput = serde_json::from_str(output)?;
+    let res = serde_json::from_str(output);
+    let ffprobe_data: FfprobeOutput = res?;
     let audio_streams: Vec<StreamInfo> = ffprobe_data.streams.into_iter().collect();
 
     Ok(VideoAudioStreamsInfo {
@@ -69,4 +70,30 @@ pub fn get_video_audio_streams_info(path: impl AsRef<str>) -> Option<VideoAudioS
     let output_str = String::from_utf8_lossy(&output.stdout);
 
     parse_ffprobe_output(&output_str).ok()
+}
+
+pub fn get_video_streams_info(path: impl AsRef<str>) -> Option<FfprobeOutput> {
+    let ffprobe_path = ffprobe_path();
+
+    if !ffprobe_is_installed() {
+        return None;
+    }
+
+    let output = std::process::Command::new(ffprobe_path)
+        .args([
+            "-v", "quiet",
+            "-print_format", "json",
+            "-select_streams", "v",
+            "-show_format",
+            "-show_streams",
+            path.as_ref()
+        ])
+        .output()
+        .ok()?;
+
+    let output_str = String::from_utf8_lossy(&output.stdout);
+
+    let ffprobe_data: FfprobeOutput = serde_json::from_str(&output_str).ok()?;
+
+    Some(ffprobe_data)
 }

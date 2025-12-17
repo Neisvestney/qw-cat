@@ -4,7 +4,7 @@ import {AudioStreamFilePath} from "../generated/bindings/AudioStreamFilePath.ts"
 import addPostfixToFilename from "../lib/addPostfixToFilename.ts";
 import replaceExtension from "../lib/replaceExtension.ts";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
-import {ffmpegExport} from "../generated";
+import {ffmpegExport, GpuAcceleration} from "../generated";
 import theme from "../theme.ts";
 
 const MINIMAL_SECONDS_DIFF = 1
@@ -115,6 +115,22 @@ class VideoEditorStore {
     this.exportFrameRate = exportFrameRate;
   }
 
+  exportVideoEncoder: string | null = null
+  setExportVideoEncoder(exportVideoEncoder: string | null) {
+    this.exportVideoEncoder = exportVideoEncoder;
+  }
+
+  exportGpuAcceleration: GpuAcceleration | null = null
+  setExportGpuAcceleration(exportGpuAcceleration: GpuAcceleration | null) {
+    this.exportGpuAcceleration = exportGpuAcceleration;
+
+    switch (exportGpuAcceleration) {
+      case "nvidia":
+        if (this.exportVideoEncoder == null && this.exportFormat == "mp4") this.exportVideoEncoder = "h264_nvenc";
+        break;
+    }
+  }
+
   async exportVideo() {
     await ffmpegExport({
       options: {
@@ -125,6 +141,8 @@ class VideoEditorStore {
         bitrate: this.exportBitrateKbps ? `${this.exportBitrateKbps}k` : null,
         resolution: this.exportResolution.replace("x", ":"),
         frameRate: this.exportFrameRate,
+        videoCodec: this.exportVideoEncoder,
+        gpuAcceleration: this.exportGpuAcceleration,
         activeAudioStreamIndexes: this.activeAudioStreamIndexes,
       }
     })

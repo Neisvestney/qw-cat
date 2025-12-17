@@ -1,7 +1,29 @@
 import {observer} from "mobx-react-lite";
 import React, {ReactEventHandler, useContext, useEffect, useMemo, useRef, useState} from "react";
 import {AppStateStoreContext} from "../stores/AppStateStore.ts";
-import {Button, ButtonGroup, Slider, Stack, styled, Dialog, DialogTitle, DialogActions, DialogContent, DialogContentText, TextField, FormGroup, FormControlLabel, Checkbox, CircularProgress, InputAdornment, IconButton, Grid, MenuItem, Autocomplete} from "@mui/material";
+import {
+  Button,
+  ButtonGroup,
+  Slider,
+  Stack,
+  styled,
+  Dialog,
+  DialogTitle,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  TextField,
+  FormGroup,
+  FormControlLabel,
+  Checkbox,
+  CircularProgress,
+  InputAdornment,
+  IconButton,
+  Grid,
+  MenuItem,
+  Autocomplete,
+  InputLabel, Select, FormControl
+} from "@mui/material";
 import {css} from '@emotion/react';
 import {convertFileSrc} from "@tauri-apps/api/core";
 import format from 'format-duration';
@@ -12,6 +34,7 @@ import {useSyncedMediaTracks} from "../lib/useSyncedMediaTracks.ts";
 import FolderIcon from "@mui/icons-material/Folder";
 import {save} from "@tauri-apps/plugin-dialog";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
+import {GpuAcceleration} from "../generated";
 
 
 const VideoContainer = styled('div')(
@@ -46,6 +69,23 @@ function valuetext(value: number) {
 
 const VIDEO_FORMATS = ["mp4", "m4v", "mov", "avi", "wmv", "flv", "f4v", "webm", "mkv", "mpg", "mpeg"]
 const VIDEO_RESOLUTIONS = ["720x480", "1080x720", "1920x1080", "2560x1440", "3840x2160"]
+const VIDEO_ENCODERS = [
+  "libx264",   // H.264 (very common for web and general use)
+  "libx265",   // H.265 / HEVC (more efficient than H.264)
+  "libvpx",    // VP8 (used in WebM)
+  "libvpx-vp9",// VP9 (higher efficiency than VP8)
+  "mpeg4",     // MPEG-4 Part 2
+  "h263",      // H.263
+  "libtheora", // Theora (used in Ogg)
+  "prores",    // Apple ProRes
+  "dnxhd",     // Avid DNxHD
+]
+
+const NVIDIA_VIDEO_ENCODERS = [
+  "h264_nvenc",
+  "hevc_nvenc",
+  "av1_nvenc"
+]
 
 
 const VideoView = observer(() => {
@@ -227,8 +267,9 @@ const VideoView = observer(() => {
                 }}
               />
             </Grid>
-            <Grid size={3}>
+            <Grid size={4}>
               <TextField
+                required
                 select
                 fullWidth
                 label="Video format"
@@ -242,7 +283,16 @@ const VideoView = observer(() => {
                 ))}
               </TextField>
             </Grid>
-            <Grid size={3}>
+            <Grid size={4}>
+              <Autocomplete
+                freeSolo
+                options={[...(appStateStore.currentVideo.exportGpuAcceleration == "nvidia" ? NVIDIA_VIDEO_ENCODERS : []), ...VIDEO_ENCODERS]}
+                value={appStateStore.currentVideo.exportVideoEncoder}
+                onChange={(e, newValue) => appStateStore.currentVideo?.setExportVideoEncoder(newValue)}
+                renderInput={(params) => <TextField {...params} fullWidth label="Video encoder" />}
+              />
+            </Grid>
+            <Grid size={4}>
               <Autocomplete
                 freeSolo
                 options={VIDEO_RESOLUTIONS}
@@ -251,7 +301,7 @@ const VideoView = observer(() => {
                 renderInput={(params) => <TextField {...params} required fullWidth label="Resolution" />}
               />
             </Grid>
-            <Grid size={3}>
+            <Grid size={4}>
               <TextField
                 label="Bitrate"
                 placeholder="Auto"
@@ -262,12 +312,13 @@ const VideoView = observer(() => {
                 slotProps={{
                   input: {
                     type: "number",
+                    startAdornment: <></>,
                     endAdornment: <InputAdornment position="end">kBit/s</InputAdornment>,
                   },
                 }}
               />
             </Grid>
-            <Grid size={3}>
+            <Grid size={4}>
               <TextField
                 label="Framerate"
                 placeholder="Auto"
@@ -277,10 +328,24 @@ const VideoView = observer(() => {
                 slotProps={{
                   input: {
                     type: "number",
+                    startAdornment: <></>,
                     endAdornment: <InputAdornment position="end">fps</InputAdornment>,
                   },
                 }}
               />
+            </Grid>
+            <Grid size={4}>
+              <FormControl fullWidth>
+                <InputLabel>GPU Acceleration</InputLabel>
+                <Select
+                  value={appStateStore.currentVideo.exportGpuAcceleration}
+                  label="GPU Acceleration"
+                  onChange={e => appStateStore.currentVideo?.setExportGpuAcceleration(e.target.value ? e.target.value as GpuAcceleration : null)}
+                >
+                  <MenuItem value={""}>None</MenuItem>
+                  <MenuItem value={"nvidia" as GpuAcceleration}>Nvidia</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
           </Grid>
         </form>

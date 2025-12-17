@@ -11,9 +11,16 @@ pub struct ExportOptions {
     pub output_path: String,
     pub resolution: Option<String>,
     pub bitrate: Option<String>,
-    pub codec: Option<String>,
+    pub video_codec: Option<String>,
     pub frame_rate: Option<f64>,
     pub active_audio_stream_indexes: Vec<usize>,
+    pub gpu_acceleration: Option<GpuAcceleration>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GpuAcceleration {
+    Nvidia
 }
 
 

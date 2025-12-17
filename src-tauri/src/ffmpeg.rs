@@ -1,6 +1,6 @@
-use crate::ffmpeg_export_command::ExportOptions;
+use crate::ffmpeg_export_command::{ExportOptions, GpuAcceleration};
 use crate::ffmpeg_time_duration::FfmpegTimeDuration;
-use crate::ffprobe::get_video_audio_streams_info;
+use crate::ffprobe::{get_video_audio_streams_info, get_video_streams_info};
 use crate::select_new_video_file_command::AudioStreamFilePath;
 use crate::APP_HANDLE;
 use base64::prelude::BASE64_STANDARD;
@@ -226,17 +226,39 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                         return None;
                     }
 
-                    let info = get_video_audio_streams_info(&options.input_path);
+                    let info = get_video_streams_info(&options.input_path);
                     if let Some(info) = info {
+                        let input_video_codec = info.streams.first().map(|s| s.codec_name.clone());
+
+                        let gpu_acceleration = {
+                          match options.gpu_acceleration {
+                              Some(GpuAcceleration::Nvidia) => {
+                                  let nvidia_gpu_args = "-hwaccel cuda -hwaccel_output_format cuda";
+                                  let gpu_scale_arg = "scale_cuda";
+
+                                  match &input_video_codec.as_deref() {
+                                      Some("h264") => {Some((nvidia_gpu_args, "h264_cuvid", gpu_scale_arg))}
+                                      Some("hevc") => {Some((nvidia_gpu_args, "hevc_cuvid", gpu_scale_arg))}
+                                      Some("av1") => {Some((nvidia_gpu_args, "av1_cuvid", gpu_scale_arg))}
+                                      _ => {None}
+                                  }
+                              }
+                              None => {
+                                  None
+                              }
+                          }
+                        };
+
                         let scale = if let Some(resolution) = options.resolution {
-                            Cow::Owned(format!(",scale={}", resolution))
+                            let scale_filter = gpu_acceleration.map(|(_, _, scale_filter)| scale_filter).unwrap_or("scale");
+                            Cow::Owned(format!(",{}={}", scale_filter, resolution))
                         } else {
                             Cow::Borrowed("")
                         };
 
                         let video_filter = format!(
-                            "[0:v]trim=start={}:end={},setpts=PTS-STARTPTS{}[v]",
-                            options.start_time, options.end_time, scale
+                            "[0:v]setpts=PTS-STARTPTS{}[v]",
+                           scale
                         );
 
                         let audio_filter = if !options.active_audio_stream_indexes.is_empty() {
@@ -245,8 +267,8 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                                 .iter()
                                 .map(|stream_index| {
                                     format!(
-                                        "[0:{}]atrim=start={}:end={},asetpts=PTS-STARTPTS[a{}];",
-                                        stream_index, options.start_time, options.end_time, stream_index
+                                        "[0:{}]asetpts=PTS-STARTPTS[a{}];",
+                                        stream_index, stream_index
                                     )
                                 })
                                 .collect::<Vec<_>>()
@@ -276,6 +298,14 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
 
                         let mut ffmpeg_command = FfmpegCommand::new();
 
+                        if let Some((args, codec, _)) = gpu_acceleration {
+                        ffmpeg_command.args(args.split_whitespace());
+                            ffmpeg_command.codec_video(codec);
+                        }
+
+                        ffmpeg_command.seek(options.start_time.to_string().as_str());
+                        ffmpeg_command.to(options.end_time.to_string().as_str());
+
                         ffmpeg_command
                             .input(&options.input_path)
                             .overwrite()
@@ -284,7 +314,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             .map("[v]")
                             .map("[a]");
 
-                        if let Some(codec) = options.codec {
+                        if let Some(codec) = options.video_codec {
                             ffmpeg_command.codec_video(codec);
                         }
 
