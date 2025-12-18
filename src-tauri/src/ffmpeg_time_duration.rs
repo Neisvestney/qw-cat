@@ -1,6 +1,6 @@
 use std::borrow::Cow;
-use std::fmt;
 use std::convert::TryFrom;
+use std::fmt;
 use std::ops::{Add, Sub};
 use std::time::Duration;
 
@@ -81,11 +81,7 @@ impl FfmpegTimeDuration {
         let str = str.trim();
 
         // Handle negative values
-        let (is_negative, str) = if str.starts_with('-') {
-            (true, &str[1..])
-        } else {
-            (false, str)
-        };
+        let (is_negative, str) = if str.starts_with('-') { (true, &str[1..]) } else { (false, str) };
 
         let mut micros: i64;
 

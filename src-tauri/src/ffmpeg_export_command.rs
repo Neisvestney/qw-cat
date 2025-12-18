@@ -1,6 +1,6 @@
+use crate::ffmpeg::{FfmpegTasksQueue, enqueue_export_video_task};
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
-use crate::ffmpeg::{enqueue_export_video_task, FfmpegTasksQueue};
 
 #[derive(Serialize, Deserialize, Debug, Clone, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
@@ -20,9 +20,8 @@ pub struct ExportOptions {
 #[derive(Serialize, Deserialize, Debug, Clone, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub enum GpuAcceleration {
-    Nvidia
+    Nvidia,
 }
-
 
 #[tauri::command]
 pub async fn ffmpeg_export(app_handle: tauri::AppHandle, options: ExportOptions) {

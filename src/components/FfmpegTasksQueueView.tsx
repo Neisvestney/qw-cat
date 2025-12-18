@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import DeleteIcon from '@mui/icons-material/Delete';
 import FolderIcon from '@mui/icons-material/Folder';
+import ListIcon from '@mui/icons-material/List';
 import AudiotrackIcon from "@mui/icons-material/Audiotrack";
 import VideocamIcon from "@mui/icons-material/Videocam";
 import {FfmpegTask} from "../generated/bindings/FfmpegTask.ts";
@@ -26,6 +27,7 @@ import CircularProgressWithLabel from "./ui/CircularProgressWithLabel.tsx";
 import {green, blue} from "@mui/material/colors";
 import {revealItemInDir} from '@tauri-apps/plugin-opener';
 import {Audiotrack} from "@mui/icons-material";
+import {LogsStoreContext} from "../stores/LogsStore.ts";
 
 const getFfmpegTaskLabel = (ffmpegTask: FfmpegTask | null) => {
   if (!ffmpegTask) return "No tasks running";
@@ -55,7 +57,7 @@ const getTaskView = (ffmpegTask: FfmpegTask) => {
     case "exportVideo":
       const outputPath = ffmpegTask.taskType.options.outputPath;
 
-      return{
+      return {
         label: {
           "queued": "Video export queued",
           "inProgress": "Exporting video",
@@ -71,12 +73,25 @@ const getTaskView = (ffmpegTask: FfmpegTask) => {
 
 const FfmpegTasksQueueView = observer(() => {
   const appStateStore = useContext(AppStateStoreContext)
+  const logsStore = useContext(LogsStoreContext)
 
   const [drawer, setDrawer] = useState(false)
 
   const DrawerList = (
-    <Box sx={{width: 500}} role="presentation">
-      <List>
+    <Box sx={{width: 500, padding: 1, display: "flex", flexDirection: "column", height: "100%"}} role="presentation">
+      <List sx={{flex: 1, marginBottom: 1, overflow: "auto"}}>
+        {appStateStore.ffmpegTasksQueue.ffmpegTasks.length == 0 &&
+            <ListItem>
+                <ListItemAvatar>
+                    <Avatar>
+                      <ListIcon/>
+                    </Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                    primary={"No tasks has been queued"}
+                />
+            </ListItem>
+        }
         {appStateStore.ffmpegTasksQueue.ffmpegTasks.slice().reverse().map((ffmpegTask, index) => {
             const ItemBody = <>
               <ListItemAvatar>
@@ -91,7 +106,7 @@ const FfmpegTasksQueueView = observer(() => {
             </>
 
             return <ListItem
-              sx={{padding: getTaskView(ffmpegTask).onClick ? 0 : 1}}
+              sx={{padding: getTaskView(ffmpegTask).onClick ? 0 : 1,}}
               key={index}
               secondaryAction={
                 <Stack direction={"row"} spacing={1}>
@@ -107,13 +122,17 @@ const FfmpegTasksQueueView = observer(() => {
               }
             >
               {getTaskView(ffmpegTask).onClick
-                ? <ListItemButton sx={{padding: 1}} onClick={getTaskView(ffmpegTask).onClick ?? undefined}>{ItemBody}</ListItemButton>
+                ? <ListItemButton sx={{padding: 1}}
+                                  onClick={getTaskView(ffmpegTask).onClick ?? undefined}>{ItemBody}</ListItemButton>
                 : ItemBody
               }
             </ListItem>;
           }
         )}
       </List>
+      <Box>
+        <Button onClick={() => logsStore.setLogsWindowOpen(true)}>Open logs</Button>
+      </Box>
     </Box>
   );
 
@@ -124,9 +143,10 @@ const FfmpegTasksQueueView = observer(() => {
       {DrawerList}
     </Drawer>
     <Snackbar
-      open={appStateStore.ffmpegTasksQueue.ffmpegTasks.length > 0}
+      // open={appStateStore.ffmpegTasksQueue.ffmpegTasks.length > 0}
+      open
       anchorOrigin={{vertical: "bottom", horizontal: "right"}}
-      message={getFfmpegTaskLabel(ffmpegTask)}
+      message={ffmpegTask?.status.type != "finished" ? getFfmpegTaskLabel(ffmpegTask) : getFfmpegTaskLabel(null)}
       action={<>
         {ffmpegTask && ffmpegTask.status.type == "inProgress" &&
           (ffmpegTask.status.progress != 0

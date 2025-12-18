@@ -1,6 +1,6 @@
-use std::process::Command;
 use ffmpeg_sidecar::ffprobe::{ffprobe_is_installed, ffprobe_path};
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 use ts_rs::TS;
 
 pub(crate) trait BackgroundCommand {

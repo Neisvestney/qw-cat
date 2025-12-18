@@ -1,18 +1,19 @@
+use crate::APP_HANDLE;
 use crate::ffmpeg_export_command::{ExportOptions, GpuAcceleration};
 use crate::ffmpeg_time_duration::FfmpegTimeDuration;
 use crate::ffprobe::{get_video_audio_streams_info, get_video_streams_info};
 use crate::select_new_video_file_command::AudioStreamFilePath;
-use crate::APP_HANDLE;
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use ffmpeg_sidecar::command::FfmpegCommand;
 use ffmpeg_sidecar::event::{FfmpegEvent, FfmpegProgress, LogLevel};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
+use log::{error, info, log, trace};
 use tauri::window::{ProgressBarState, ProgressBarStatus};
-use tokio::sync::{oneshot, Mutex, MutexGuard, RwLock};
+use tauri::{Emitter, Manager};
+use tokio::sync::{Mutex, MutexGuard, RwLock, oneshot};
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -190,7 +191,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
 
                         ffmpeg_child.iter().unwrap().for_each(|e| match e {
                             FfmpegEvent::Log(LogLevel::Error, e) => {
-                                println!("Error while running ffmpeg: {e}")
+                                error!("Error while running ffmpeg: {e}")
                             }
                             FfmpegEvent::Progress(p) => {
                                 handle_ffmpeg_progress(p, &ffmpeg_task_clone, info.duration);
@@ -231,22 +232,20 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                         let input_video_codec = info.streams.first().map(|s| s.codec_name.clone());
 
                         let gpu_acceleration = {
-                          match options.gpu_acceleration {
-                              Some(GpuAcceleration::Nvidia) => {
-                                  let nvidia_gpu_args = "-hwaccel cuda -hwaccel_output_format cuda";
-                                  let gpu_scale_arg = "scale_cuda";
+                            match options.gpu_acceleration {
+                                Some(GpuAcceleration::Nvidia) => {
+                                    let nvidia_gpu_args = "-hwaccel cuda -hwaccel_output_format cuda";
+                                    let gpu_scale_arg = "scale_cuda";
 
-                                  match &input_video_codec.as_deref() {
-                                      Some("h264") => {Some((nvidia_gpu_args, "h264_cuvid", gpu_scale_arg))}
-                                      Some("hevc") => {Some((nvidia_gpu_args, "hevc_cuvid", gpu_scale_arg))}
-                                      Some("av1") => {Some((nvidia_gpu_args, "av1_cuvid", gpu_scale_arg))}
-                                      _ => {None}
-                                  }
-                              }
-                              None => {
-                                  None
-                              }
-                          }
+                                    match &input_video_codec.as_deref() {
+                                        Some("h264") => Some((nvidia_gpu_args, "h264_cuvid", gpu_scale_arg)),
+                                        Some("hevc") => Some((nvidia_gpu_args, "hevc_cuvid", gpu_scale_arg)),
+                                        Some("av1") => Some((nvidia_gpu_args, "av1_cuvid", gpu_scale_arg)),
+                                        _ => None,
+                                    }
+                                }
+                                None => None,
+                            }
                         };
 
                         let scale = if let Some(resolution) = options.resolution {
@@ -256,21 +255,13 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             Cow::Borrowed("")
                         };
 
-                        let video_filter = format!(
-                            "[0:v]setpts=PTS-STARTPTS{}[v]",
-                           scale
-                        );
+                        let video_filter = format!("[0:v]setpts=PTS-STARTPTS{}[v]", scale);
 
                         let audio_filter = if !options.active_audio_stream_indexes.is_empty() {
                             let audio_streams_trim = options
                                 .active_audio_stream_indexes
                                 .iter()
-                                .map(|stream_index| {
-                                    format!(
-                                        "[0:{}]asetpts=PTS-STARTPTS[a{}];",
-                                        stream_index, stream_index
-                                    )
-                                })
+                                .map(|stream_index| format!("[0:{}]asetpts=PTS-STARTPTS[a{}];", stream_index, stream_index))
                                 .collect::<Vec<_>>()
                                 .join("");
 
@@ -289,17 +280,13 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             )
                         } else {
                             // Generate silence
-                            format!(
-                                "aevalsrc=0:d={}[a]",
-                                options.end_time - options.start_time
-                            )
+                            format!("aevalsrc=0:d={}[a]", options.end_time - options.start_time)
                         };
-
 
                         let mut ffmpeg_command = FfmpegCommand::new();
 
                         if let Some((args, codec, _)) = gpu_acceleration {
-                        ffmpeg_command.args(args.split_whitespace());
+                            ffmpeg_command.args(args.split_whitespace());
                             ffmpeg_command.codec_video(codec);
                         }
 
@@ -329,16 +316,16 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
 
                         ffmpeg_command.preset("medium").output(&options.output_path);
 
-                        println!("Running ffmpeg command: {:?}", ffmpeg_command);
+                        trace!("Running ffmpeg command: {:?}", ffmpeg_command.print_command());
 
                         let mut ffmpeg_child = ffmpeg_command.spawn().unwrap();
 
                         ffmpeg_child.iter().unwrap().for_each(|e| match e {
-                            FfmpegEvent::Log(LogLevel::Error, e) => {
-                                println!("Error while running ffmpeg: {e}")
+                            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, e) => {
+                                error!("Ffmpeg: {e}")
                             }
                             FfmpegEvent::Log(log_level, s) => {
-                                println!("Ffmpeg log [{log_level:?}]: {s}")
+                                info!("Ffmpeg: {s}")
                             }
                             FfmpegEvent::Progress(p) => {
                                 handle_ffmpeg_progress(p, &ffmpeg_task_clone, options.end_time - options.start_time);
@@ -397,7 +384,7 @@ async fn emit_ffmpeg_queue_status() {
 
 fn handle_ffmpeg_progress(p: FfmpegProgress, ffmpeg_task: &Arc<RwLock<FfmpegTask>>, total_duration: f64) {
     let ffmpeg_task_clone = ffmpeg_task.clone();
-    println!("ffmpeg progress {:?}", p);
+    info!("FFmpeg progress event: {:?}", p);
     tokio::spawn(async move {
         let mut ffmpeg_task = ffmpeg_task_clone.write().await;
         let progress = FfmpegTimeDuration::from_str(&p.time)
@@ -412,27 +399,32 @@ fn handle_ffmpeg_progress(p: FfmpegProgress, ffmpeg_task: &Arc<RwLock<FfmpegTask
     });
 }
 
-
 fn set_main_window_progress_bar(progress: Option<f64>) {
     let app_handle = APP_HANDLE.get().unwrap();
     let main_window = app_handle.get_webview_window("main").unwrap();
 
     if let Some(progress) = progress {
         if progress != 0.0 {
-            main_window.set_progress_bar(ProgressBarState {
-                status: Some(ProgressBarStatus::Normal),
-                progress: Some((progress * 100.0) as u64),
-            }).unwrap();
+            main_window
+                .set_progress_bar(ProgressBarState {
+                    status: Some(ProgressBarStatus::Normal),
+                    progress: Some((progress * 100.0) as u64),
+                })
+                .unwrap();
         } else {
-            main_window.set_progress_bar(ProgressBarState {
-                status: Some(ProgressBarStatus::Indeterminate),
-                progress: None,
-            }).unwrap();
+            main_window
+                .set_progress_bar(ProgressBarState {
+                    status: Some(ProgressBarStatus::Indeterminate),
+                    progress: None,
+                })
+                .unwrap();
         }
     } else {
-        main_window.set_progress_bar(ProgressBarState {
-            status: Some(ProgressBarStatus::None),
-            progress: None,
-        }).unwrap();
+        main_window
+            .set_progress_bar(ProgressBarState {
+                status: Some(ProgressBarStatus::None),
+                progress: None,
+            })
+            .unwrap();
     }
 }

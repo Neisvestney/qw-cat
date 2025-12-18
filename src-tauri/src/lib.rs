@@ -1,24 +1,29 @@
 mod ffmpeg;
-mod ffprobe;
-mod select_new_video_file_command;
-mod ffmpeg_time_duration;
 mod ffmpeg_export_command;
+mod ffmpeg_time_duration;
+mod ffprobe;
 mod handle_main_window_event;
+mod select_new_video_file_command;
 mod temp_cleanup;
 
 use crate::ffmpeg::create_ffmpeg_tasks_queue;
-use crate::select_new_video_file_command::select_new_video_file;
-use std::sync::OnceLock;
-use tauri::{AppHandle, generate_handler, Manager, async_runtime};
 use crate::ffmpeg_export_command::ffmpeg_export;
 use crate::handle_main_window_event::handle_main_window_event;
+use crate::select_new_video_file_command::select_new_video_file;
 use crate::temp_cleanup::cleanup_temp;
+use std::sync::OnceLock;
+use tauri::{async_runtime, generate_handler, AppHandle, Manager};
 
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview))
+                .build(),
+        )
         .plugin(prevent_default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -37,7 +42,6 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
 
 #[cfg(debug_assertions)]
 fn prevent_default() -> tauri::plugin::TauriPlugin<tauri::Wry> {
