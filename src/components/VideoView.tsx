@@ -35,6 +35,7 @@ import FolderIcon from "@mui/icons-material/Folder";
 import {save} from "@tauri-apps/plugin-dialog";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
 import {GpuAcceleration} from "../generated";
+import ReplayIcon from "@mui/icons-material/Replay";
 
 const ViewContainer = styled('div')(
   ({theme}) => css`
@@ -145,6 +146,12 @@ const VideoView = observer(() => {
     }
   }, [backConfirmation]);
 
+  useEffect(() => {
+    if (videoElement.current == null || appStateStore.currentVideo?.videoTargetTime == null) return;
+
+    videoElement.current.currentTime = appStateStore.currentVideo.videoTargetTime;
+  }, [appStateStore.currentVideo?.videoTargetTime]);
+
   if (!appStateStore.currentVideo) return;
 
   const onLoadedMetadata = () => {
@@ -191,8 +198,6 @@ const VideoView = observer(() => {
       appStateStore.currentVideo?.setExportPath(path)
     }
   }
-
-  console.log("Rendering video view")
 
   return <ViewContainer>
     <VideoContainer>
@@ -404,6 +409,13 @@ const RangeButtons = observer(() => {
       onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handleEndHere()}
     >
       End Here
+    </Button>
+    <Button
+      variant={"outlined"}
+      onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handlePlayFromStart()}
+      startIcon={<ReplayIcon/>}
+    >
+      Play from start
     </Button>
   </Stack>
 })

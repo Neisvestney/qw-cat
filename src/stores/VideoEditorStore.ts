@@ -19,6 +19,8 @@ class VideoEditorStore {
 
   videoCurrentTime: number | null = null
 
+  videoTargetTime: number | null = null
+
   activeAudioStreamIndexes: number[]
 
   setVideoDuration(duration: number) {
@@ -57,6 +59,10 @@ class VideoEditorStore {
     this.trimEnd = this.videoCurrentTime;
   }
 
+  handlePlayFromStart() {
+    this.setVideoTime(this.trimStart ?? 0);
+  }
+
   updateAudioStreamsFilePaths(audioStreamsFilePaths: AudioStreamFilePath[]) {
     this.audioStreamsFilePaths = audioStreamsFilePaths;
   }
@@ -72,6 +78,12 @@ class VideoEditorStore {
 
   onVideoCurrentTimeChanged(currentTime: number) {
     this.videoCurrentTime = currentTime;
+    this.videoTargetTime = null;
+  }
+
+  setVideoTime(time: number) {
+    this.videoCurrentTime = time;
+    this.videoTargetTime = time;
   }
 
   getAudioStreamFilePath(streamIndex: number) {
