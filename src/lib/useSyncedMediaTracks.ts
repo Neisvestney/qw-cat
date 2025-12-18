@@ -2,6 +2,7 @@ import { MutableRefObject, useEffect, useRef } from 'react';
 
 export function useSyncedMediaTracks(
   audioUrls: string[],
+  audionStreamsCount: number,
   gains: number[],
   videoRef: MutableRefObject<HTMLVideoElement | null>
 ) {
@@ -10,7 +11,7 @@ export function useSyncedMediaTracks(
   const gainNodesRef = useRef<Map<number, GainNode>>(new Map());
   const sourcesRef = useRef<Map<number, AudioBufferSourceNode>>(new Map());
   const pendingPlayRef = useRef(false);
-  const readyCountsRef = useRef({ loaded: 0, total: audioUrls.length });
+  const readyCountsRef = useRef({ loaded: 0, total: audionStreamsCount });
   const abortRef = useRef<AbortController | null>(null);
 
   const stopSource = (idx: number) => {
@@ -50,7 +51,7 @@ export function useSyncedMediaTracks(
     ctxRef.current = ctx;
     abortRef.current = new AbortController();
 
-    readyCountsRef.current = { loaded: 0, total: audioUrls.length };
+    readyCountsRef.current = { loaded: 0, total: audionStreamsCount };
     buffersRef.current.clear();
     gainNodesRef.current.clear();
     sourcesRef.current.clear();
@@ -68,6 +69,7 @@ export function useSyncedMediaTracks(
 
         readyCountsRef.current.loaded += 1;
 
+        console.log(`Loaded audio track`, pendingPlayRef.current);
         if (pendingPlayRef.current && videoRef.current && !videoRef.current.paused) {
           startSourceAt(idx, videoRef.current.currentTime);
         }
@@ -86,7 +88,7 @@ export function useSyncedMediaTracks(
       gainNodesRef.current.clear();
       sourcesRef.current.clear();
     };
-  }, [audioUrls, gains.length, videoRef]);
+  }, [audioUrls, gains.length, videoRef, audionStreamsCount]);
 
   // update gains dynamically
   useEffect(() => {

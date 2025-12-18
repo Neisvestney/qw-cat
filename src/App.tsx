@@ -23,7 +23,7 @@ const App = observer(() => {
       <AppStateStoreContext.Provider value={appStateStore}>
         <ThemeProvider theme={theme}>
           <CssBaseline enableColorScheme/>
-          <Container maxWidth="xl" sx={{paddingTop: 4, minHeight: "100vh", display: "flex", flexDirection: "column"}}>
+          <Container maxWidth={false} sx={{paddingTop: 4, minHeight: "100vh", display: "flex", flexDirection: "column"}}>
             {appStateStore.currentVideo ? <VideoView/> : <SelectFile/>}
           </Container>
           <FfmpegTasksQueueView/>

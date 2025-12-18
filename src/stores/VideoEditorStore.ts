@@ -70,6 +70,10 @@ class VideoEditorStore {
     }
   }
 
+  onVideoCurrentTimeChanged(currentTime: number) {
+    this.videoCurrentTime = currentTime;
+  }
+
   getAudioStreamFilePath(streamIndex: number) {
     return this.audioStreamsFilePaths?.find(x => x.index == streamIndex) ?? null
   }

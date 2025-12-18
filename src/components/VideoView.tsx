@@ -36,21 +36,47 @@ import {save} from "@tauri-apps/plugin-dialog";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
 import {GpuAcceleration} from "../generated";
 
+const ViewContainer = styled('div')(
+  ({theme}) => css`
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+  `,
+);
+
 
 const VideoContainer = styled('div')(
   ({theme}) => css`
       background-color: ${theme.palette.grey["900"]};
-      height: 540px;
-      display: flex;
-      justify-content: center;
+      flex: 1;
+      position: relative;
   `,
 );
 
+const VideoWrapper = styled('div')(
+  ({theme}) => css`
+      position: absolute;
+      display: flex;
+      justify-content: center;
+      top: 0;
+      bottom: 0;
+      right: 0;
+      left: 0;
+  `,
+);
 
 const Video = styled('video')(
   ({theme}) => css`
       max-width: 100%;
       max-height: 100%;
+  `,
+);
+
+const Controls = styled('div')(
+  ({theme}) => css`
+      display: flex;
+      flex-direction: column;
+      min-height: 180px;
   `,
 );
 
@@ -103,7 +129,7 @@ const VideoView = observer(() => {
     [toJS(appStateStore.currentVideo?.audioStreamsFilePaths), toJS(appStateStore.currentVideo?.activeAudioStreamIndexes)]
   )
 
-  useSyncedMediaTracks(audioUrls, audioGains, videoElement)
+  useSyncedMediaTracks(audioUrls, appStateStore.currentVideo?.audioStreamsInfo.audioStreams.length ?? 0, audioGains, videoElement)
 
   useEffect(() => {
     if (!appStateStore.currentVideo || !videoElement.current) return;
@@ -124,12 +150,6 @@ const VideoView = observer(() => {
   const onLoadedMetadata = () => {
     if (!videoElement.current || !appStateStore.currentVideo) return;
     appStateStore.currentVideo.setVideoDuration(videoElement.current.duration)
-  }
-
-  const sliderValue = [appStateStore.currentVideo.trimStart ?? 0, appStateStore.currentVideo.trimEnd ?? 0]
-  const handleSliderValueChange = (e: Event, v: number[]) => {
-    if (!appStateStore.currentVideo) return;
-    appStateStore.currentVideo.updateVideoTrimValues(v[0], v[1]);
   }
 
   const handleExportClicked = () => {
@@ -172,69 +192,50 @@ const VideoView = observer(() => {
     }
   }
 
-  return <Stack>
-    <VideoContainer>
-      <Video
-        ref={videoElement}
-        controls
-        onLoadedMetadata={onLoadedMetadata}
-        src={convertFileSrc(appStateStore.currentVideo.path)}
-        onTimeUpdate={(e) => {
-          if (appStateStore.currentVideo) appStateStore.currentVideo.videoCurrentTime = e.currentTarget.currentTime
-        }}
-      />
-    </VideoContainer>
-    <Slider
-      sx={{marginLeft: 2, marginRight: 2, width: "auto"}}
-      value={sliderValue}
-      onChange={handleSliderValueChange}
-      valueLabelDisplay="auto"
-      getAriaValueText={valuetext}
-      valueLabelFormat={valuetext}
-      max={appStateStore.currentVideo.duration ?? 0}
-      step={0.01}
-      disableSwap
-    />
-    <AdditionalButtons>
-      <Stack direction={"row"} spacing={1}>
-        <Button
-          variant={"outlined"}
-          disabled={appStateStore.currentVideo.startHereDisabled}
-          onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handleStartHere()}
-        >
-          Start Here
-        </Button>
-        <Button
-          variant={"outlined"}
-          disabled={appStateStore.currentVideo.endHereDisabled}
-          onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handleEndHere()}
-        >
-          End Here
-        </Button>
-      </Stack>
-      <Stack direction={"row"} spacing={1}>
-        <Button variant={"outlined"} startIcon={<ArrowBackIcon/>} color={backConfirmation ? "error" : "info"} onClick={handleBackClicked}>{backConfirmation ? "Are you sure?" : "Back"}</Button>
-        <Button variant={"outlined"} endIcon={<FileUploadIcon/>} color={"success"} onClick={handleExportClicked}>Export</Button>
-      </Stack>
-    </AdditionalButtons>
-    <FormGroup>
-      {appStateStore.currentVideo.audioStreamsInfo.audioStreams.map((audioStream, index) => {
-        const audioStreamPath = appStateStore.currentVideo!.getAudioStreamFilePath(audioStream.index)
-        const defaultAudio = audioStream.index == appStateStore.currentVideo!.defaultAudioStreamIndex
+  console.log("Rendering video view")
 
-        return <FormControlLabel
-          key={audioStream.index}
-          control={<Checkbox
-            checked={appStateStore.currentVideo!.activeAudioStreamIndexes.includes(audioStream.index)}
-            onChange={() => appStateStore.currentVideo!.toggleAudioStream(audioStream.index)}
-          />}
-          label={<Stack direction={"row"} sx={{gap: 1, alignItems: "center"}}>
-            {`Audio stream #${index + 1}`}
-            {!defaultAudio && !audioStreamPath && <CircularProgress size={15}/>}
-          </Stack>}
-        />;
-      })}
-    </FormGroup>
+  return <ViewContainer>
+    <VideoContainer>
+      <VideoWrapper>
+        <Video
+          ref={videoElement}
+          controls
+          onLoadedMetadata={onLoadedMetadata}
+          src={convertFileSrc(appStateStore.currentVideo.path)}
+          onTimeUpdate={(e) => {
+            if (appStateStore.currentVideo) appStateStore.currentVideo.onVideoCurrentTimeChanged(e.currentTarget.currentTime)
+          }}
+        />
+      </VideoWrapper>
+    </VideoContainer>
+    <Controls>
+      <Timeline/>
+      <AdditionalButtons>
+        <RangeButtons/>
+        <Stack direction={"row"} spacing={1}>
+          <Button variant={"outlined"} startIcon={<ArrowBackIcon/>} color={backConfirmation ? "error" : "info"} onClick={handleBackClicked}>{backConfirmation ? "Are you sure?" : "Back"}</Button>
+          <Button variant={"outlined"} endIcon={<FileUploadIcon/>} color={"success"} onClick={handleExportClicked}>Export</Button>
+        </Stack>
+      </AdditionalButtons>
+      <FormGroup>
+        {appStateStore.currentVideo.audioStreamsInfo.audioStreams.map((audioStream, index) => {
+          const audioStreamPath = appStateStore.currentVideo!.getAudioStreamFilePath(audioStream.index)
+          const defaultAudio = audioStream.index == appStateStore.currentVideo!.defaultAudioStreamIndex
+
+          return <FormControlLabel
+            key={audioStream.index}
+            control={<Checkbox
+              checked={appStateStore.currentVideo!.activeAudioStreamIndexes.includes(audioStream.index)}
+              onChange={() => appStateStore.currentVideo!.toggleAudioStream(audioStream.index)}
+            />}
+            label={<Stack direction={"row"} sx={{gap: 1, alignItems: "center"}}>
+              {`Audio stream #${index + 1}`}
+              {!defaultAudio && !audioStreamPath && <CircularProgress size={15}/>}
+            </Stack>}
+          />;
+        })}
+      </FormGroup>
+    </Controls>
 
     <Dialog open={exportModalOpen} onClose={handleExportModalClose} maxWidth={"md"} fullWidth>
       <DialogTitle>Export video</DialogTitle>
@@ -357,6 +358,53 @@ const VideoView = observer(() => {
         </Button>
       </DialogActions>
     </Dialog>
+  </ViewContainer>
+})
+
+const Timeline = observer(() => {
+  const appStateStore = useContext(AppStateStoreContext)
+
+  if (!appStateStore.currentVideo) return null;
+
+  const sliderValue = [appStateStore.currentVideo.trimStart ?? 0, appStateStore.currentVideo.trimEnd ?? 0]
+  const handleSliderValueChange = (e: Event, v: number[]) => {
+    if (!appStateStore.currentVideo) return;
+    appStateStore.currentVideo.updateVideoTrimValues(v[0], v[1]);
+  }
+
+  return <Slider
+    sx={{marginLeft: 2, marginRight: 2, width: "auto"}}
+    value={sliderValue}
+    onChange={handleSliderValueChange}
+    valueLabelDisplay="auto"
+    getAriaValueText={valuetext}
+    valueLabelFormat={valuetext}
+    max={appStateStore.currentVideo.duration ?? 0}
+    step={0.01}
+    disableSwap
+  />
+})
+
+const RangeButtons = observer(() => {
+  const appStateStore = useContext(AppStateStoreContext)
+
+  if (!appStateStore.currentVideo) return null;
+
+  return <Stack direction={"row"} spacing={1}>
+    <Button
+      variant={"outlined"}
+      disabled={appStateStore.currentVideo.startHereDisabled}
+      onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handleStartHere()}
+    >
+      Start Here
+    </Button>
+    <Button
+      variant={"outlined"}
+      disabled={appStateStore.currentVideo.endHereDisabled}
+      onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handleEndHere()}
+    >
+      End Here
+    </Button>
   </Stack>
 })
 
