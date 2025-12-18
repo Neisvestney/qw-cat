@@ -10,7 +10,7 @@ use ffmpeg_sidecar::event::{FfmpegEvent, FfmpegProgress, LogLevel};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::sync::Arc;
-use log::{error, info, log, trace};
+use log::{debug, error, info, log, trace};
 use tauri::window::{ProgressBarState, ProgressBarStatus};
 use tauri::{Emitter, Manager};
 use tokio::sync::{Mutex, MutexGuard, RwLock, oneshot};
@@ -38,6 +38,7 @@ pub enum FfmpegTaskStatus {
     Queued,
     InProgress { progress: f64 },
     Finished,
+    Failed,
 }
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS)]
@@ -181,6 +182,10 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             .map(|s| format!("-map 0:{} -c:a aac -b:a 192k {}", s.index, s.path))
                             .collect::<Vec<_>>()
                             .join(" ");
+                        
+                        if maps.is_empty() {
+                            return Some(result);
+                        }
 
                         let mut ffmpeg_child = FfmpegCommand::new()
                             .input(&video_file_path)
@@ -190,8 +195,11 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             .unwrap();
 
                         ffmpeg_child.iter().unwrap().for_each(|e| match e {
-                            FfmpegEvent::Log(LogLevel::Error, e) => {
-                                error!("Error while running ffmpeg: {e}")
+                            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, e) => {
+                                error!("Ffmpeg: {e}")
+                            }
+                            FfmpegEvent::Log(log_level, s) => {
+                                info!("Ffmpeg: {s}")
                             }
                             FfmpegEvent::Progress(p) => {
                                 handle_ffmpeg_progress(p, &ffmpeg_task_clone, info.duration);
@@ -199,21 +207,35 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             _ => {}
                         });
 
-                        Some(result)
+                        let exit_status = ffmpeg_child.wait();
+                        debug!("Ffmpeg exited with status: {:?}", exit_status);
+
+                        let successful = exit_status.map(|s| s.success()).unwrap_or(false);
+
+                        if successful {
+                            Some(result)
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
                 })
-                .await
-                .unwrap();
+                    .await
+                    .ok()
+                    .flatten();
 
                 let mut ffmpeg_task = ffmpeg_task.write().await;
-                ffmpeg_task.status = FfmpegTaskStatus::Finished;
-                if let FfmpegTaskType::ExtractAudio { on_complete, result, .. } = &mut ffmpeg_task.task_type {
-                    *result = ffmpeg_result.clone();
-                    if let Some(sender) = on_complete.take() {
-                        sender.send(ffmpeg_result.unwrap()).unwrap();
+                if ffmpeg_result.is_some() {
+                    ffmpeg_task.status = FfmpegTaskStatus::Finished;
+                    if let FfmpegTaskType::ExtractAudio { on_complete, result, .. } = &mut ffmpeg_task.task_type {
+                        *result = ffmpeg_result.clone();
+                        if let Some(sender) = on_complete.take() {
+                            sender.send(ffmpeg_result.unwrap()).unwrap();
+                        }
                     }
+                } else {
+                    ffmpeg_task.status = FfmpegTaskStatus::Failed;
                 }
                 drop(ffmpeg_task);
             }
@@ -333,22 +355,36 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             _ => {}
                         });
 
-                        let result = FfmpegExportVideoTaskResult {
-                            output_path: options.output_path.clone(),
-                        };
+                        let exit_status = ffmpeg_child.wait();
+                        debug!("Ffmpeg exited with status: {:?}", exit_status);
 
-                        Some(result)
+                        let successful = exit_status.map(|s| s.success()).unwrap_or(false);
+
+                        if successful {
+                            let result = FfmpegExportVideoTaskResult {
+                                output_path: options.output_path.clone(),
+                            };
+
+                            Some(result)
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
                 })
-                .await
-                .unwrap();
+                    .await
+                    .ok()
+                    .flatten();
 
                 let mut ffmpeg_task = ffmpeg_task.write().await;
-                ffmpeg_task.status = FfmpegTaskStatus::Finished;
-                if let FfmpegTaskType::ExportVideo { result, .. } = &mut ffmpeg_task.task_type {
-                    *result = ffmpeg_result.clone();
+                if ffmpeg_result.is_some() {
+                    ffmpeg_task.status = FfmpegTaskStatus::Finished;
+                    if let FfmpegTaskType::ExportVideo { result, .. } = &mut ffmpeg_task.task_type {
+                        *result = ffmpeg_result.clone();
+                    }
+                } else {
+                    ffmpeg_task.status = FfmpegTaskStatus::Failed;
                 }
                 drop(ffmpeg_task);
             }

@@ -13,6 +13,7 @@ use crate::select_new_video_file_command::select_new_video_file;
 use crate::temp_cleanup::cleanup_temp;
 use std::sync::OnceLock;
 use tauri::{async_runtime, generate_handler, AppHandle, Manager};
+use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
@@ -21,6 +22,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
+                .with_colors(ColoredLevelConfig::new())
                 .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview))
                 .build(),
         )

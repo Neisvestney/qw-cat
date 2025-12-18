@@ -30,6 +30,6 @@ ts-rs = "11.1.0"
 base64 = "0.22.1"
 futures = "0.3.31"
 tauri-plugin-prevent-default = "4.0.3"
-tauri-plugin-log = "2"
+tauri-plugin-log = { version = "2", features = ["colored"] }
 log = "0.4.29"
 

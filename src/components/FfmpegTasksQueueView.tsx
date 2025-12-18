@@ -24,7 +24,7 @@ import AudiotrackIcon from "@mui/icons-material/Audiotrack";
 import VideocamIcon from "@mui/icons-material/Videocam";
 import {FfmpegTask} from "../generated/bindings/FfmpegTask.ts";
 import CircularProgressWithLabel from "./ui/CircularProgressWithLabel.tsx";
-import {green, blue} from "@mui/material/colors";
+import {green, blue, red} from "@mui/material/colors";
 import {revealItemInDir} from '@tauri-apps/plugin-opener';
 import {Audiotrack} from "@mui/icons-material";
 import {LogsStoreContext} from "../stores/LogsStore.ts";
@@ -38,7 +38,8 @@ const getFfmpegTaskLabel = (ffmpegTask: FfmpegTask | null) => {
 const taskStatusColors = {
   queued: undefined,
   inProgress: blue[500],
-  finished: green[500]
+  finished: green[500],
+  failed: red[600]
 }
 
 const getTaskView = (ffmpegTask: FfmpegTask) => {
@@ -49,6 +50,7 @@ const getTaskView = (ffmpegTask: FfmpegTask) => {
           "queued": "Audio preparation queued",
           "inProgress": "Preparing audio",
           "finished": "Audio prepared",
+          "failed": "Audio preparation failed - see logs for more info",
         }[ffmpegTask.status.type],
         secondary: `${ffmpegTask.taskType.videoFilePath}`,
         icon: <AudiotrackIcon/>,
@@ -62,6 +64,7 @@ const getTaskView = (ffmpegTask: FfmpegTask) => {
           "queued": "Video export queued",
           "inProgress": "Exporting video",
           "finished": "Video exported",
+          "failed": "Video export failed - see logs for more info",
         }[ffmpegTask.status.type],
         secondary: outputPath,
         icon: <VideocamIcon/>,
@@ -131,7 +134,7 @@ const FfmpegTasksQueueView = observer(() => {
         )}
       </List>
       <Box>
-        <Button onClick={() => logsStore.setLogsWindowOpen(true)}>Open logs</Button>
+        <Button onClick={() => logsStore.setLogsWindowOpen(true)}>Show logs</Button>
       </Box>
     </Box>
   );
