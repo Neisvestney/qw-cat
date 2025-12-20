@@ -13,8 +13,15 @@ pub struct ExportOptions {
     pub bitrate: Option<String>,
     pub video_codec: Option<String>,
     pub frame_rate: Option<f64>,
-    pub active_audio_stream_indexes: Vec<usize>,
+    pub active_audio_streams: Vec<ExportAudioStreamOptions>,
     pub gpu_acceleration: Option<GpuAcceleration>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportAudioStreamOptions {
+    pub index: usize,
+    pub gain: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ts_rs::TS)]

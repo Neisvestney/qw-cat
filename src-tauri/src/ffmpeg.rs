@@ -279,18 +279,18 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
 
                         let video_filter = format!("[0:v]setpts=PTS-STARTPTS{}[v]", scale);
 
-                        let audio_filter = if !options.active_audio_stream_indexes.is_empty() {
+                        let audio_filter = if !options.active_audio_streams.is_empty() {
                             let audio_streams_trim = options
-                                .active_audio_stream_indexes
+                                .active_audio_streams
                                 .iter()
-                                .map(|stream_index| format!("[0:{}]asetpts=PTS-STARTPTS[a{}];", stream_index, stream_index))
+                                .map(|stream| format!("[0:{}]volume={},asetpts=PTS-STARTPTS[a{}];", stream.index, stream.gain, stream.index))
                                 .collect::<Vec<_>>()
                                 .join("");
 
                             let audio_streams = options
-                                .active_audio_stream_indexes
+                                .active_audio_streams
                                 .iter()
-                                .map(|stream_index| format!("[a{}]", stream_index))
+                                .map(|stream| format!("[a{}]", stream.index))
                                 .collect::<Vec<_>>()
                                 .join("");
 
@@ -298,7 +298,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                                 "{}{}amix=inputs={}[a]",
                                 audio_streams_trim,
                                 audio_streams,
-                                options.active_audio_stream_indexes.len()
+                                options.active_audio_streams.len()
                             )
                         } else {
                             // Generate silence

@@ -1,5 +1,5 @@
 import {observer} from "mobx-react-lite";
-import React, {ReactEventHandler, useContext, useEffect, useMemo, useRef, useState} from "react";
+import React, {ChangeEvent, ReactEventHandler, useContext, useEffect, useMemo, useRef, useState} from "react";
 import {AppStateStoreContext} from "../stores/AppStateStore.ts";
 import {
   Button,
@@ -22,20 +22,25 @@ import {
   Grid,
   MenuItem,
   Autocomplete,
-  InputLabel, Select, FormControl
+  InputLabel, Select, FormControl,
+  Input,
 } from "@mui/material";
 import {css} from '@emotion/react';
 import {convertFileSrc} from "@tauri-apps/api/core";
 import format from 'format-duration';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import {toJS} from "mobx";
+import {autorun, toJS} from "mobx";
 import {useSyncedMediaTracks} from "../lib/useSyncedMediaTracks.ts";
 import FolderIcon from "@mui/icons-material/Folder";
 import {save} from "@tauri-apps/plugin-dialog";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
 import {GpuAcceleration} from "../generated";
 import ReplayIcon from "@mui/icons-material/Replay";
+import {VolumeDown, VolumeUp} from "@mui/icons-material";
+import {AudioStream} from "../stores/VideoEditorStore.ts";
+import {useDebouncedCallback, useThrottledCallback} from "use-debounce";
+import {gainToGainValue, useVideoGain} from "../lib/useVideoGain.ts";
 
 const ViewContainer = styled('div')(
   ({theme}) => css`
@@ -121,23 +126,54 @@ const VideoView = observer(() => {
   const [exportModalOpen, setExportModalOpen] = useState(false)
   const [backConfirmation, setBackConfirmation] = useState(false);
 
-  const audioUrls = useMemo(
-    () => (appStateStore.currentVideo?.audioStreamsFilePaths ?? []).map(x => convertFileSrc(x.path)),
-    [toJS(appStateStore.currentVideo?.audioStreamsFilePaths)]
-  )
-  const audioGains = useMemo(
-    () => (appStateStore.currentVideo?.audioStreamsFilePaths ?? []).map(x => appStateStore.currentVideo?.activeAudioStreamIndexes.includes(x.index) ? 1 : 0),
-    [toJS(appStateStore.currentVideo?.audioStreamsFilePaths), toJS(appStateStore.currentVideo?.activeAudioStreamIndexes)]
-  )
+  // const audioUrls = useMemo(
+  //   () => (appStateStore.currentVideo?.audioStreams ?? []).filter(x => x.path).map(x => convertFileSrc(x.path!)),
+  //   [toJS(appStateStore.currentVideo?.audioStreams.map(x => x.path))]
+  // )
+  // const audioGains = useMemo(
+  //   () => (appStateStore.currentVideo?.audioStreams ?? []).map(x => x.active ? x.gain : 0),
+  //   [toJS(appStateStore.currentVideo?.audioStreams)]
+  // )
 
-  useSyncedMediaTracks(audioUrls, appStateStore.currentVideo?.audioStreamsInfo.audioStreams.length ?? 0, audioGains, videoElement)
-
+  const [audioUrls, setAudioUrls] = useState<string[]>([]);
+  const [audioGains, setAudioGains] = useState<number[]>([]);
+  const audioGainsThrottled = useThrottledCallback(
+    (value: number[]) => {
+      setAudioGains(value);
+    },
+    100
+  );
   useEffect(() => {
-    if (!appStateStore.currentVideo || !videoElement.current) return;
+    const dispose1 = autorun(() => {
+      if (!appStateStore.currentVideo) return;
 
-    const defaultAudioStreamEnabled = appStateStore.currentVideo.activeAudioStreamIndexes.includes(appStateStore.currentVideo.defaultAudioStreamIndex)
-    videoElement.current.volume = defaultAudioStreamEnabled ? 1 : 0
-  }, [toJS(appStateStore.currentVideo?.activeAudioStreamIndexes)]);
+      const a = appStateStore.currentVideo.audioStreams
+        .filter(x => x.streamIndex != appStateStore.currentVideo!.defaultAudioStreamIndex)
+        .filter(x => x.path)
+        .map(x => convertFileSrc(x.path!));
+
+      setAudioUrls(a)
+    })
+
+    const dispose2 = autorun(() => {
+      if (!appStateStore.currentVideo) return;
+
+      const a = appStateStore.currentVideo.audioStreams
+        .filter(x => x.streamIndex != appStateStore.currentVideo!.defaultAudioStreamIndex)
+        .map(x => x.active ? gainToGainValue(x.gain) : 0);
+
+      audioGainsThrottled(a)
+    })
+
+    return () => {
+      dispose1()
+      dispose2()
+    };
+  }, []);
+
+  useSyncedMediaTracks(audioUrls, appStateStore.currentVideo?.audioStreams.length ?? 0, audioGains, videoElement)
+
+  const audioCtx = useVideoGain(videoElement, appStateStore.currentVideo?.defaultAudioStream)
 
   useEffect(() => {
     if (backConfirmation) {
@@ -175,6 +211,7 @@ const VideoView = observer(() => {
   }
 
   const handleBackClicked = () => {
+    audioCtx.current?.resume()
     if (!backConfirmation) {setBackConfirmation(true); return}
 
     appStateStore.closeCurrentVideo()
@@ -204,6 +241,8 @@ const VideoView = observer(() => {
       <VideoWrapper>
         <Video
           ref={videoElement}
+          crossOrigin="anonymous"
+          controlsList="nodownload noplaybackrate noremoteplayback novolume"
           controls
           onLoadedMetadata={onLoadedMetadata}
           src={convertFileSrc(appStateStore.currentVideo.path)}
@@ -223,21 +262,25 @@ const VideoView = observer(() => {
         </Stack>
       </AdditionalButtons>
       <FormGroup>
-        {appStateStore.currentVideo.audioStreamsInfo.audioStreams.map((audioStream, index) => {
-          const audioStreamPath = appStateStore.currentVideo!.getAudioStreamFilePath(audioStream.index)
-          const defaultAudio = audioStream.index == appStateStore.currentVideo!.defaultAudioStreamIndex
+        {appStateStore.currentVideo.audioStreams.map((audioStream, index) => {
+          const audioStreamPath = audioStream.path
+          const defaultAudio = audioStream.streamIndex == appStateStore.currentVideo!.defaultAudioStreamIndex
+          const audioStreamEnabled = audioStream.active
 
-          return <FormControlLabel
-            key={audioStream.index}
-            control={<Checkbox
-              checked={appStateStore.currentVideo!.activeAudioStreamIndexes.includes(audioStream.index)}
-              onChange={() => appStateStore.currentVideo!.toggleAudioStream(audioStream.index)}
-            />}
-            label={<Stack direction={"row"} sx={{gap: 1, alignItems: "center"}}>
-              {`Audio stream #${index + 1}`}
-              {!defaultAudio && !audioStreamPath && <CircularProgress size={15}/>}
-            </Stack>}
-          />;
+          return <Stack spacing={1} direction="row" sx={{alignItems: "center"}}>
+            <FormControlLabel
+              key={audioStream.streamIndex}
+              control={<Checkbox
+                checked={audioStreamEnabled}
+                onChange={() => appStateStore.currentVideo!.toggleAudioStream(audioStream.streamIndex)}
+              />}
+              label={<Stack direction={"row"} sx={{gap: 1, alignItems: "center"}}>
+                {`Audio stream #${index + 1}`}
+                {!defaultAudio && !audioStreamPath && <CircularProgress size={15}/>}
+              </Stack>}
+            />
+            {(defaultAudio || audioStreamPath) && <AudioVolumeSlider audioStream={audioStream}/>}
+          </Stack>;
         })}
       </FormGroup>
     </Controls>
@@ -388,6 +431,53 @@ const Timeline = observer(() => {
     step={0.01}
     disableSwap
   />
+})
+
+function gainLabelFormat(v: number) {
+  return `${v.toFixed(1)}%`
+}
+
+const AudioVolumeSlider = observer(({audioStream}: {audioStream: AudioStream}) => {
+  const appStateStore = useContext(AppStateStoreContext)
+
+  if (!appStateStore.currentVideo) return null;
+
+  const onInputValueChanged = (e: ChangeEvent<HTMLInputElement>) => {
+    const number = parseInt(e.target.value)
+    appStateStore.currentVideo?.updateAudioStreamGain(audioStream.streamIndex, !isNaN(number) ? number : 0)
+  }
+
+  return <Stack spacing={2} direction="row" sx={{ alignItems: 'center', width: 400 }}>
+    <VolumeDown />
+    <Slider
+      value={audioStream.gain}
+      onChange={(e, v) => appStateStore.currentVideo?.updateAudioStreamGain(audioStream.streamIndex, v)}
+      aria-label="Volume"
+      color={audioStream.active ? (audioStream.gain > 100 ? "warning" : "primary") : "secondary"}
+      min={0}
+      max={200}
+      // valueLabelFormat={gainLabelFormat}
+      // valueLabelDisplay="auto"
+      step={(audioStream.gain > 98 && audioStream.gain < 102) ? 10 : 0.1}
+      marks={[
+        {value: 100}
+      ]}
+    />
+    <VolumeUp />
+    <Input
+      value={audioStream.gain}
+      size="small"
+      sx={{width: 150}}
+      onChange={onInputValueChanged}
+      endAdornment={<InputAdornment position="end">%</InputAdornment>}
+      inputProps={{
+        step: 10,
+        min: 0,
+        type: 'number',
+        'aria-labelledby': 'input-slider',
+      }}
+    />
+  </Stack>
 })
 
 const RangeButtons = observer(() => {

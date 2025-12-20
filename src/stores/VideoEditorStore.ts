@@ -1,4 +1,4 @@
-import {makeAutoObservable, runInAction} from "mobx";
+import {makeAutoObservable, runInAction, trace} from "mobx";
 import {VideoAudioStreamsInfo} from "../generated/bindings/VideoAudioStreamsInfo.ts";
 import {AudioStreamFilePath} from "../generated/bindings/AudioStreamFilePath.ts";
 import addPostfixToFilename from "../lib/addPostfixToFilename.ts";
@@ -6,13 +6,20 @@ import replaceExtension from "../lib/replaceExtension.ts";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
 import {ffmpegExport, GpuAcceleration} from "../generated";
 import theme from "../theme.ts";
+import {gainToGainValue} from "../lib/useVideoGain.ts";
+
+export interface AudioStream {
+  streamIndex: number;
+  active: boolean;
+  gain: number;
+  path: string | null;
+}
 
 const MINIMAL_SECONDS_DIFF = 1
 
 class VideoEditorStore {
   path: string
-  audioStreamsInfo: VideoAudioStreamsInfo
-  audioStreamsFilePaths: AudioStreamFilePath[] | null = null
+  audioStreams: AudioStream[]
   duration: number | null
   trimStart: number | null
   trimEnd: number | null
@@ -20,8 +27,6 @@ class VideoEditorStore {
   videoCurrentTime: number | null = null
 
   videoTargetTime: number | null = null
-
-  activeAudioStreamIndexes: number[]
 
   setVideoDuration(duration: number) {
     this.duration = duration;
@@ -64,15 +69,23 @@ class VideoEditorStore {
   }
 
   updateAudioStreamsFilePaths(audioStreamsFilePaths: AudioStreamFilePath[]) {
-    this.audioStreamsFilePaths = audioStreamsFilePaths;
+    for (const audioStreamsFilePath of audioStreamsFilePaths) {
+      const index = this.audioStreams.findIndex(x => x.streamIndex == audioStreamsFilePath.index);
+      if (index != -1) this.audioStreams[index].path = audioStreamsFilePath.path;
+    }
   }
 
   toggleAudioStream(streamIndex: number) {
-    const index = this.activeAudioStreamIndexes.indexOf(streamIndex);
-    if (index > -1) {
-      this.activeAudioStreamIndexes.splice(index, 1);
-    } else {
-      this.activeAudioStreamIndexes.push(streamIndex);
+    const index = this.audioStreams.findIndex(x => x.streamIndex == streamIndex)
+    if (index != -1) {
+      this.audioStreams[index].active = !this.audioStreams[index].active;
+    }
+  }
+
+  updateAudioStreamGain(streamIndex: number, gain: number) {
+    const index = this.audioStreams.findIndex(x => x.streamIndex == streamIndex)
+    if (index != -1) {
+      this.audioStreams[index].gain = gain;
     }
   }
 
@@ -86,12 +99,12 @@ class VideoEditorStore {
     this.videoTargetTime = time;
   }
 
-  getAudioStreamFilePath(streamIndex: number) {
-    return this.audioStreamsFilePaths?.find(x => x.index == streamIndex) ?? null
+  get defaultAudioStream() {
+    return this.audioStreams[0];
   }
 
   get defaultAudioStreamIndex() {
-    return this.audioStreamsInfo.audioStreams[0].index;
+    return this.defaultAudioStream.streamIndex;
   }
 
   get trimDurationSeconds() {
@@ -159,7 +172,10 @@ class VideoEditorStore {
         frameRate: this.exportFrameRate,
         videoCodec: this.exportVideoEncoder,
         gpuAcceleration: this.exportGpuAcceleration,
-        activeAudioStreamIndexes: this.activeAudioStreamIndexes,
+        activeAudioStreams: this.audioStreams.filter(x => x.active).map(x => ({
+          index: x.streamIndex,
+          gain: gainToGainValue(x.gain)
+        })),
       }
     })
   }
@@ -168,8 +184,12 @@ class VideoEditorStore {
     makeAutoObservable(this, {}, {autoBind: true})
 
     this.path = path;
-    this.audioStreamsInfo = videoAudioStreamsInfo;
-    this.activeAudioStreamIndexes = videoAudioStreamsInfo.audioStreams.map(x => x.index);
+    this.audioStreams = videoAudioStreamsInfo.audioStreams.map(x => ({
+      streamIndex: x.index,
+      active: true,
+      gain: 100,
+      path: null,
+    }));
     this.duration = null;
     this.trimStart = null;
     this.trimEnd = null;
