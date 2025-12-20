@@ -23,7 +23,7 @@ import {
   MenuItem,
   Autocomplete,
   InputLabel, Select, FormControl,
-  Input,
+  Input, SliderThumb, Box,
 } from "@mui/material";
 import {css} from '@emotion/react';
 import {convertFileSrc} from "@tauri-apps/api/core";
@@ -82,7 +82,7 @@ const Controls = styled('div')(
   ({theme}) => css`
       display: flex;
       flex-direction: column;
-      min-height: 180px;
+      min-height: 230px;
   `,
 );
 
@@ -183,10 +183,12 @@ const VideoView = observer(() => {
   }, [backConfirmation]);
 
   useEffect(() => {
-    if (videoElement.current == null || appStateStore.currentVideo?.videoTargetTime == null) return;
-
-    videoElement.current.currentTime = appStateStore.currentVideo.videoTargetTime;
-  }, [appStateStore.currentVideo?.videoTargetTime]);
+    const dispose = autorun(() => {
+      if (videoElement.current == null || appStateStore.currentVideo?.videoTargetTime == null) return;
+      videoElement.current.currentTime = appStateStore.currentVideo.videoTargetTime;
+    })
+    return () => dispose()
+  }, []);
 
   if (!appStateStore.currentVideo) return;
 
@@ -235,6 +237,8 @@ const VideoView = observer(() => {
       appStateStore.currentVideo?.setExportPath(path)
     }
   }
+
+  console.log("VideoView rendered!")
 
   return <ViewContainer>
     <VideoContainer>
@@ -409,29 +413,130 @@ const VideoView = observer(() => {
   </ViewContainer>
 })
 
+const TimelineSlider = styled(Slider)(
+  ({theme}) => css`
+      pointer-events: none;
+      
+      & .MuiSlider-thumb {
+          pointer-events: auto;
+          height: 27px;
+          width: 12px;
+          background-color: #fff;
+          border: 1px solid ${theme.palette.primary.dark};
+          border-radius: 5px;
+    
+          //&:hover {
+          //    boxShadow: 0 0 0 8px rgba(58, 133, 137, 0.16);
+          //}
+          
+          &[data-index='0'] { // Left thumb
+            transform: translate(-100%, -50%);
+          }
+    
+          &[data-index='1'] { // Right thumb
+              transform: translate(0, -50%);
+          }
+    
+          & .bar {
+              height: 12px;
+              width: 2px;
+              background-color: ${theme.palette.primary.dark};
+              margin-left: 1px;
+              margin-right: 1px;
+          }
+      }
+      
+      & .MuiSlider-track {
+          border-radius: 0;
+      }
+  `,
+)
+
+const VideoProgressSlider = styled(Slider)(
+  ({theme}) => css`
+      & .MuiSlider-thumb {
+          top: -15px;
+          
+          & > .pin {
+              position: relative;
+              width: 4px;
+              height: 20px;
+              background-color: ${theme.palette.primary.main};
+              top: 20px;
+          }
+      }
+  `,
+)
+
 const Timeline = observer(() => {
   const appStateStore = useContext(AppStateStoreContext)
 
   if (!appStateStore.currentVideo) return null;
 
+  const handleVideoProgressSliderChange = (e: Event, v: number | number[]) => {
+    if (!appStateStore.currentVideo || typeof v != "number") return;
+    appStateStore.currentVideo.setVideoTime(v)
+  }
+
   const sliderValue = [appStateStore.currentVideo.trimStart ?? 0, appStateStore.currentVideo.trimEnd ?? 0]
-  const handleSliderValueChange = (e: Event, v: number[]) => {
-    if (!appStateStore.currentVideo) return;
+  const handleSliderValueChange = (e: Event, v: number[] | number) => {
+    if (!appStateStore.currentVideo || typeof v == "number") return;
     appStateStore.currentVideo.updateVideoTrimValues(v[0], v[1]);
   }
 
-  return <Slider
-    sx={{marginLeft: 2, marginRight: 2, width: "auto"}}
-    value={sliderValue}
-    onChange={handleSliderValueChange}
-    valueLabelDisplay="auto"
-    getAriaValueText={valuetext}
-    valueLabelFormat={valuetext}
-    max={appStateStore.currentVideo.duration ?? 0}
-    step={0.01}
-    disableSwap
-  />
+  return <Box sx={{display: "grid", marginLeft: 3, marginRight: 3, marginTop: 4}}>
+    <Box sx={{gridRow: "1", gridColumn: "1"}}>
+      <VideoProgressSlider
+        value={appStateStore.currentVideo.videoCurrentTime ?? 0}
+        onChange={handleVideoProgressSliderChange}
+        valueLabelDisplay="auto"
+        getAriaValueText={valuetext}
+        valueLabelFormat={valuetext}
+        max={appStateStore.currentVideo.duration ?? 0}
+        step={0.0001}
+        slots={{
+          rail: () => <></>,
+          track: () => <></>,
+          thumb: VideoProgressThumbComponent,
+        }}
+      />
+    </Box>
+    <Box sx={{gridRow: "1", gridColumn: "1"}}>
+      <TimelineSlider
+        value={sliderValue}
+        onChange={handleSliderValueChange}
+        valueLabelDisplay="auto"
+        getAriaValueText={valuetext}
+        valueLabelFormat={valuetext}
+        slots={{thumb: TimelineTrimThumbComponent}}
+        max={appStateStore.currentVideo.duration ?? 0}
+        step={0.01}
+        disableSwap
+      />
+    </Box>
+  </Box>
 })
+
+function TimelineTrimThumbComponent(props: React.HTMLAttributes<unknown>) {
+  const { children, ...other } = props;
+  return (
+    <SliderThumb {...other}>
+      {children}
+      <span className="bar" />
+      <span className="bar" />
+    </SliderThumb>
+  );
+}
+
+function VideoProgressThumbComponent(props: React.HTMLAttributes<unknown>) {
+  const { children, ...other } = props;
+  return (
+    <SliderThumb {...other}>
+      {children}
+      <span className="pin" />
+    </SliderThumb>
+  );
+}
 
 function gainLabelFormat(v: number) {
   return `${v.toFixed(1)}%`
