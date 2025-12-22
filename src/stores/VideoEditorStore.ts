@@ -15,6 +15,17 @@ export interface AudioStream {
   path: string | null;
 }
 
+type Nullable<T> = {
+  [P in keyof T]: T[P] | null;
+};
+
+export interface VideoState {
+  time: number;
+  playing: boolean;
+  loading: boolean;
+  fullscreen: boolean;
+}
+
 const MINIMAL_SECONDS_DIFF = 1
 
 class VideoEditorStore {
@@ -24,15 +35,25 @@ class VideoEditorStore {
   trimStart: number | null
   trimEnd: number | null
 
-  videoCurrentTime: number | null = null
+  videoState: VideoState = {
+    time: 0,
+    playing: false,
+    loading: false,
+    fullscreen: false,
+  }
 
-  videoTargetTime: number | null = null
+  videoTargetState: Nullable<VideoState> = {
+    time: null,
+    playing: null,
+    loading: null,
+    fullscreen: null,
+  }
 
   setVideoDuration(duration: number) {
     this.duration = duration;
     this.trimStart = 0;
     this.trimEnd = duration;
-    this.videoCurrentTime = 0;
+    this.videoState.time = 0;
   }
 
   updateVideoTrimValues(trimStart: number, trimEnd: number) {
@@ -45,23 +66,23 @@ class VideoEditorStore {
   }
 
   get startHereDisabled() {
-    if (this.trimEnd == null || this.videoCurrentTime == null) return true;
-    return this.trimEnd - MINIMAL_SECONDS_DIFF < this.videoCurrentTime
+    if (this.trimEnd == null || this.videoState.time == null) return true;
+    return this.trimEnd - MINIMAL_SECONDS_DIFF < this.videoState.time
   }
 
   handleStartHere() {
     if(this.startHereDisabled) return;
-    this.trimStart = this.videoCurrentTime;
+    this.trimStart = this.videoState.time;
   }
 
   get endHereDisabled() {
-    if (this.trimStart == null || this.videoCurrentTime == null) return true;
-    return this.trimStart + MINIMAL_SECONDS_DIFF > this.videoCurrentTime
+    if (this.trimStart == null || this.videoState.time == null) return true;
+    return this.trimStart + MINIMAL_SECONDS_DIFF > this.videoState.time
   }
 
   handleEndHere() {
     if(this.endHereDisabled) return;
-    this.trimEnd = this.videoCurrentTime;
+    this.trimEnd = this.videoState.time;
   }
 
   handlePlayFromStart() {
@@ -89,14 +110,37 @@ class VideoEditorStore {
     }
   }
 
-  onVideoCurrentTimeChanged(currentTime: number) {
-    this.videoCurrentTime = currentTime;
-    this.videoTargetTime = null;
+  handleVideoStateChange<K extends keyof VideoState>(key: K, value: VideoState[K]) {
+    this.videoState[key] = value;
+    this.videoTargetState[key] = null;
   }
 
   setVideoTime(time: number) {
-    this.videoCurrentTime = time;
-    this.videoTargetTime = time;
+    this.videoState.time = time;
+    this.videoTargetState.time = time;
+  }
+
+  seekVideoBy(seconds: number) {
+    this.setVideoTime(Math.min(this.duration ?? 0, Math.max(0, this.videoState.time + seconds)));
+  }
+
+  setVideoPlaying(playing: boolean) {
+    this.videoState.playing = playing;
+    this.videoTargetState.playing = playing;
+  }
+
+  toggleVideoPlaying() {
+    console.log("toggleVideoPlaying", this.videoState.playing)
+    this.setVideoPlaying(!this.videoState.playing);
+  }
+
+  setVideoFullscreen(fullscreen: boolean) {
+    this.videoState.fullscreen = fullscreen;
+    this.videoTargetState.fullscreen = fullscreen;
+  }
+
+  toggleVideoFullscreen() {
+    this.setVideoFullscreen(!this.videoState.fullscreen);
   }
 
   get defaultAudioStream() {

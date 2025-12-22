@@ -1,9 +1,8 @@
 import {observer} from "mobx-react-lite";
-import React, {ChangeEvent, ReactEventHandler, useContext, useEffect, useMemo, useRef, useState} from "react";
+import React, {ChangeEvent, CSSProperties, useContext, useEffect, useRef, useState} from "react";
 import {AppStateStoreContext} from "../stores/AppStateStore.ts";
 import {
   Button,
-  ButtonGroup,
   Slider,
   Stack,
   styled,
@@ -11,7 +10,6 @@ import {
   DialogTitle,
   DialogActions,
   DialogContent,
-  DialogContentText,
   TextField,
   FormGroup,
   FormControlLabel,
@@ -23,18 +21,22 @@ import {
   MenuItem,
   Autocomplete,
   InputLabel, Select, FormControl,
-  Input, SliderThumb, Box,
+  Input, SliderThumb, Box, Avatar,
 } from "@mui/material";
 import {css} from '@emotion/react';
 import {convertFileSrc} from "@tauri-apps/api/core";
 import format from 'format-duration';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import {autorun, toJS} from "mobx";
+import {autorun} from "mobx";
 import {useSyncedMediaTracks} from "../lib/useSyncedMediaTracks.ts";
 import FolderIcon from "@mui/icons-material/Folder";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import PauseIcon from "@mui/icons-material/Pause";
+import PlayCircleIcon from "@mui/icons-material/PlayCircle";
+import PauseCircleIcon from "@mui/icons-material/PauseCircle";
+import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import {save} from "@tauri-apps/plugin-dialog";
-import estimateVideoSize from "../lib/estimateVideoSize.ts";
 import {GpuAcceleration} from "../generated";
 import ReplayIcon from "@mui/icons-material/Replay";
 import {VolumeDown, VolumeUp} from "@mui/icons-material";
@@ -71,24 +73,114 @@ const VideoWrapper = styled('div')(
   `,
 );
 
+// noinspection CssInvalidPseudoSelector
 const Video = styled('video')(
   ({theme}) => css`
       max-width: 100%;
       max-height: 100%;
+      
+      &::-webkit-media-controls-enclosure {
+          display:none !important;
+      }
+      
+      &::-webkit-media-controls {
+          display:none !important;
+      }
   `,
 );
+
+interface VideoOverlayControlsWrapperProps {
+  align?: CSSProperties["alignItems"];
+}
+
+const VideoOverlayControlsWrapper = styled('div')<VideoOverlayControlsWrapperProps>(
+  ({theme, align}) => css`
+      z-index: 2147483647;
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      right: 0;
+      left: 0;
+      
+      pointer-events: none;
+      
+      display: flex;
+      align-items: ${align ?? "end"};
+      justify-content: center;
+  `,
+);
+
+const VideoOverlayControls = styled('div')(
+  ({theme}) => css`
+      width: 100%;
+      position: relative;
+      background: linear-gradient(
+              to top,
+              rgba(0, 0, 0, 0.9) 0%,
+              rgba(0, 0, 0, 0.4) 100%
+      );
+
+      pointer-events: auto;
+
+      &::before {
+          content: "";
+          position: absolute;
+          top: -48px;
+          left: 0;
+          right: 0;
+          height: 48px;
+          background: linear-gradient(
+                  to top,
+                  rgba(0, 0, 0, 0.4),
+                  rgba(0, 0, 0, 0)
+          );
+          //pointer-events: none;
+      }
+
+      transition: opacity 0.3s;
+      opacity: 0;
+      &:hover {
+          opacity: 1;
+      }
+  `,
+);
+
+const VideoPlayPauseBlinker = styled('div')(
+  ({theme}) => css`
+      opacity: 0;
+      
+      &.blink {
+          animation: pulse 500ms infinite;
+      }
+
+      @keyframes pulse {
+          0% { 
+              transform: scale(1); 
+              opacity: 0;
+          }
+          50% { 
+              transform: scale(1.2);
+              opacity: 0.7;
+          }
+          100% { 
+              transform: scale(1.3);
+              opacity: 0;
+          }
+      }
+  `
+)
 
 const Controls = styled('div')(
   ({theme}) => css`
       display: flex;
       flex-direction: column;
       min-height: 230px;
+      gap: ${theme.spacing(1)};
   `,
 );
 
 const AdditionalButtons = styled('div')(
   ({theme}) => css`
-      padding-top: ${theme.spacing(2)};
       display: flex;
       justify-content: space-between;
       gap: ${theme.spacing(2)};
@@ -122,7 +214,9 @@ const NVIDIA_VIDEO_ENCODERS = [
 
 const VideoView = observer(() => {
   const appStateStore = useContext(AppStateStoreContext)
-  const videoElement = useRef<HTMLVideoElement>(null)
+  const videoElementRef = useRef<HTMLVideoElement>(null)
+  const videoWrapperElementRef = useRef<HTMLDivElement>(null);
+
   const [exportModalOpen, setExportModalOpen] = useState(false)
   const [backConfirmation, setBackConfirmation] = useState(false);
 
@@ -171,9 +265,9 @@ const VideoView = observer(() => {
     };
   }, []);
 
-  useSyncedMediaTracks(audioUrls, appStateStore.currentVideo?.audioStreams.length ?? 0, audioGains, videoElement)
+  useSyncedMediaTracks(audioUrls, appStateStore.currentVideo?.audioStreams.length ?? 0, audioGains, videoElementRef)
 
-  const audioCtx = useVideoGain(videoElement, appStateStore.currentVideo?.defaultAudioStream)
+  const audioCtx = useVideoGain(videoElementRef, appStateStore.currentVideo?.defaultAudioStream)
 
   useEffect(() => {
     if (backConfirmation) {
@@ -183,23 +277,122 @@ const VideoView = observer(() => {
   }, [backConfirmation]);
 
   useEffect(() => {
+    const handleTimeUpdate = (e: Event) => {
+      if (appStateStore.currentVideo) appStateStore.currentVideo.handleVideoStateChange("time", videoElementRef.current?.currentTime ?? 0)
+    }
+
+    const handleVideoPlay = (e: Event) => {
+      if (appStateStore.currentVideo) {
+        appStateStore.currentVideo.handleVideoStateChange("playing", true)
+        appStateStore.currentVideo.handleVideoStateChange("loading", false)
+      }
+    }
+
+    const handleVideoPause = (e: Event) => {
+      if (appStateStore.currentVideo) appStateStore.currentVideo.handleVideoStateChange("playing", false)
+    }
+
+    const handleWaiting = (e: Event) => {
+      if (appStateStore.currentVideo) appStateStore.currentVideo.handleVideoStateChange("loading", true)
+    }
+
+    const handleFullscreen = (e: Event) => {
+      if (appStateStore.currentVideo) appStateStore.currentVideo.handleVideoStateChange("fullscreen", !!document.fullscreenElement)
+    }
+
+    videoElementRef.current?.addEventListener("timeupdate", handleTimeUpdate)
+    videoElementRef.current?.addEventListener("play", handleVideoPlay)
+    videoElementRef.current?.addEventListener("playing", handleVideoPlay)
+    videoElementRef.current?.addEventListener("pause", handleVideoPause)
+    videoElementRef.current?.addEventListener("waiting", handleWaiting)
+    document.addEventListener("fullscreenchange", handleFullscreen)
+
     const dispose = autorun(() => {
-      if (videoElement.current == null || appStateStore.currentVideo?.videoTargetTime == null) return;
-      videoElement.current.currentTime = appStateStore.currentVideo.videoTargetTime;
+      if (videoElementRef.current == null || appStateStore.currentVideo == null) return;
+
+      if (appStateStore.currentVideo.videoTargetState.time != null)
+        videoElementRef.current.currentTime = appStateStore.currentVideo.videoTargetState.time
+
+      if (appStateStore.currentVideo.videoTargetState.playing != null) {
+        appStateStore.currentVideo.videoTargetState.playing
+          ? videoElementRef.current.play()
+          : videoElementRef.current.pause()
+      }
+
+      if (appStateStore.currentVideo.videoTargetState.fullscreen != null) {
+        if (appStateStore.currentVideo.videoTargetState.fullscreen) {
+          videoWrapperElementRef.current?.requestFullscreen()
+        } else {
+          document.exitFullscreen()
+        }
+      }
     })
-    return () => dispose()
+    return () => {
+      dispose()
+      videoElementRef.current?.removeEventListener("timeupdate", handleTimeUpdate)
+      videoElementRef.current?.removeEventListener("play", handleVideoPlay)
+      videoElementRef.current?.removeEventListener("pause", handleVideoPause)
+      videoElementRef.current?.removeEventListener("pause", handleVideoPause)
+      videoElementRef.current?.removeEventListener("waiting", handleWaiting)
+      document.removeEventListener("fullscreenchange", handleFullscreen)
+    }
   }, []);
+
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      console.log(e.code)
+      if (e.code == "Space") {
+        e.preventDefault();
+        e.stopPropagation();
+        appStateStore.currentVideo?.toggleVideoPlaying()
+      }
+
+      if (e.code == "ArrowRight") {
+        e.preventDefault();
+        e.stopPropagation();
+        appStateStore.currentVideo?.seekVideoBy(5)
+      }
+
+      if (e.code == "ArrowLeft") {
+        e.preventDefault();
+        e.stopPropagation();
+        appStateStore.currentVideo?.seekVideoBy(-5)
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyPress)
+
+    return () => window.removeEventListener("keydown", handleKeyPress)
+  }, []);
+
+  const [blinkPlayPauseIcon, setBlinkPlayPauseIcon] = useState(false);
+  useEffect(() => {
+    setTimeout(() => setBlinkPlayPauseIcon(true), 10)
+    const timeout = setTimeout(() => setBlinkPlayPauseIcon(false), 500)
+    return () => {
+      setBlinkPlayPauseIcon(false)
+      clearTimeout(timeout)
+    }
+  }, [appStateStore.currentVideo?.videoState.playing]);
 
   if (!appStateStore.currentVideo) return;
 
   const onLoadedMetadata = () => {
-    if (!videoElement.current || !appStateStore.currentVideo) return;
-    appStateStore.currentVideo.setVideoDuration(videoElement.current.duration)
+    if (!videoElementRef.current || !appStateStore.currentVideo) return;
+    appStateStore.currentVideo.setVideoDuration(videoElementRef.current.duration)
+  }
+
+  const handleVideoClicked = () => {
+    appStateStore.currentVideo?.toggleVideoPlaying()
+  }
+
+  const handleVideoDoubleClicked = () => {
+    appStateStore.currentVideo?.toggleVideoFullscreen()
   }
 
   const handleExportClicked = () => {
     setExportModalOpen(true)
-    videoElement.current?.pause()
+    appStateStore.currentVideo?.setVideoPlaying(false)
   }
   const handleExportModalClose = () => {
     setExportModalOpen(false)
@@ -242,22 +435,37 @@ const VideoView = observer(() => {
 
   return <ViewContainer>
     <VideoContainer>
-      <VideoWrapper>
+      <VideoWrapper ref={videoWrapperElementRef}>
         <Video
-          ref={videoElement}
+          ref={videoElementRef}
           crossOrigin="anonymous"
           controlsList="nodownload noplaybackrate noremoteplayback novolume"
-          controls
+          controls={false}
           onLoadedMetadata={onLoadedMetadata}
           src={convertFileSrc(appStateStore.currentVideo.path)}
-          onTimeUpdate={(e) => {
-            if (appStateStore.currentVideo) appStateStore.currentVideo.onVideoCurrentTimeChanged(e.currentTarget.currentTime)
-          }}
+          onClick={handleVideoClicked}
+          onDoubleClick={handleVideoDoubleClicked}
         />
+        <VideoOverlayControlsWrapper align={"center"}>
+          <VideoPlayPauseBlinker className={blinkPlayPauseIcon ? "blink" : ""}>
+            {
+              appStateStore.currentVideo.videoState.playing
+                ? <PlayCircleIcon sx={{ fontSize: 80 }}/>
+                : <PauseCircleIcon sx={{ fontSize: 80 }}/>
+            }
+          </VideoPlayPauseBlinker>
+        </VideoOverlayControlsWrapper>
+        <VideoOverlayControlsWrapper>
+          {appStateStore.currentVideo.videoState.fullscreen &&
+            <VideoOverlayControls>
+                <TimelineWithControls/>
+            </VideoOverlayControls>
+          }
+        </VideoOverlayControlsWrapper>
       </VideoWrapper>
     </VideoContainer>
     <Controls>
-      <Timeline/>
+      <TimelineWithControls/>
       <AdditionalButtons>
         <RangeButtons/>
         <Stack direction={"row"} spacing={1}>
@@ -413,6 +621,37 @@ const VideoView = observer(() => {
   </ViewContainer>
 })
 
+const formatTime = (value: number) => {
+  return format(value * 1000, {})
+}
+
+const TimelineWithControls = observer(() => {
+  const appStateStore = useContext(AppStateStoreContext)
+
+  if (!appStateStore.currentVideo) return null;
+
+  return <Box sx={{display: "flex", alignItems: "end", gap: 1, width: "100%"}}>
+    <Box sx={{marginBottom: "2px"}}>
+      <IconButton onClick={appStateStore.currentVideo?.toggleVideoPlaying}>
+        {
+          appStateStore.currentVideo.videoState.playing
+            ? <PauseIcon/>
+            : <PlayArrowIcon/>
+        }
+      </IconButton>
+    </Box>
+    <Timeline/>
+    <Box sx={{marginBottom: "8px"}}>
+      {formatTime(appStateStore.currentVideo.videoState.time ?? 0)} / {formatTime(appStateStore.currentVideo.duration ?? 0)}
+    </Box>
+    <Box sx={{marginBottom: "2px"}}>
+      <IconButton onClick={appStateStore.currentVideo?.toggleVideoFullscreen}>
+        <FullscreenIcon/>
+      </IconButton>
+    </Box>
+  </Box>
+})
+
 const TimelineSlider = styled(Slider)(
   ({theme}) => css`
       pointer-events: none;
@@ -460,9 +699,10 @@ const VideoProgressSlider = styled(Slider)(
           & > .pin {
               position: relative;
               width: 4px;
-              height: 20px;
+              height: 25px;
               background-color: ${theme.palette.primary.main};
-              top: 20px;
+              top: 17px;
+              border-radius: 20%;
           }
       }
   `,
@@ -471,11 +711,19 @@ const VideoProgressSlider = styled(Slider)(
 const Timeline = observer(() => {
   const appStateStore = useContext(AppStateStoreContext)
 
+  const [progress, setProgress] = useState(0);
+
+  const throttle = useThrottledCallback(() => {
+    if (!appStateStore.currentVideo) return;
+    appStateStore.currentVideo.setVideoTime(progress)
+  }, 100)
+
   if (!appStateStore.currentVideo) return null;
 
   const handleVideoProgressSliderChange = (e: Event, v: number | number[]) => {
     if (!appStateStore.currentVideo || typeof v != "number") return;
-    appStateStore.currentVideo.setVideoTime(v)
+    setProgress(v)
+    throttle()
   }
 
   const sliderValue = [appStateStore.currentVideo.trimStart ?? 0, appStateStore.currentVideo.trimEnd ?? 0]
@@ -484,10 +732,19 @@ const Timeline = observer(() => {
     appStateStore.currentVideo.updateVideoTrimValues(v[0], v[1]);
   }
 
-  return <Box sx={{display: "grid", marginLeft: 3, marginRight: 3, marginTop: 4}}>
+  useEffect(() => {
+    const dispose = autorun(() => {
+      if (!appStateStore.currentVideo) return;
+      setProgress(appStateStore.currentVideo.videoState.time)
+    })
+
+    return () => dispose()
+  }, []);
+
+  return <Box sx={{display: "grid", marginTop: 4, flex: "1", marginLeft: "12px", marginRight: "12px"}}>
     <Box sx={{gridRow: "1", gridColumn: "1"}}>
       <VideoProgressSlider
-        value={appStateStore.currentVideo.videoCurrentTime ?? 0}
+        value={progress}
         onChange={handleVideoProgressSliderChange}
         valueLabelDisplay="auto"
         getAriaValueText={valuetext}
