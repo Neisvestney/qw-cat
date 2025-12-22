@@ -470,7 +470,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
 
                     info!("FFmpeg is installed: {} (ffmpeg path: {:?})", ffmpeg_is_installed, ffmpeg_path().to_str());
 
-                    if ffmpeg_path().to_str() != Some("ffmpeg") && ffmpeg_is_installed {
+                    if ffmpeg_is_installed {
                         return Ok(true)
                     }
 
