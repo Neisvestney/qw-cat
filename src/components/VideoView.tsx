@@ -21,7 +21,7 @@ import {
   MenuItem,
   Autocomplete,
   InputLabel, Select, FormControl,
-  Input, SliderThumb, Box, Avatar, ToggleButton,
+  Input, SliderThumb, Box, Avatar, ToggleButton, Tooltip,
 } from "@mui/material";
 import {css} from '@emotion/react';
 import {convertFileSrc} from "@tauri-apps/api/core";
@@ -317,23 +317,37 @@ const VideoView = observer(() => {
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      console.log(e.code)
-      if (e.code == "Space") {
-        e.preventDefault();
-        e.stopPropagation();
-        appStateStore.currentVideo?.toggleVideoPlaying()
-      }
+      if (e.altKey || e.ctrlKey || e.shiftKey || e.metaKey) return;
 
-      if (e.code == "ArrowRight") {
-        e.preventDefault();
-        e.stopPropagation();
-        appStateStore.currentVideo?.seekVideoBy(5)
-      }
+      const keyCodeActions: Record<string, () => void> = {
+        "Space": () => {
+          appStateStore.currentVideo?.toggleVideoPlaying()
+        },
+        "ArrowRight": () => {
+          appStateStore.currentVideo?.seekVideoBy(5)
+        },
+        "ArrowLeft": () => {
+          appStateStore.currentVideo?.seekVideoBy(-5)
+        },
+        "KeyF": () => {
+          appStateStore.currentVideo?.toggleVideoFullscreen()
+        },
+        "KeyA": () => {
+          appStateStore.currentVideo?.handleStartHere()
+        },
+        "KeyD": () => {
+          appStateStore.currentVideo?.handleEndHere()
+        },
+        "KeyR": () => {
+          appStateStore.currentVideo?.handlePlayFromStart()
+        },
+      };
 
-      if (e.code == "ArrowLeft") {
+      const action = keyCodeActions[e.code];
+      if (action) {
         e.preventDefault();
         e.stopPropagation();
-        appStateStore.currentVideo?.seekVideoBy(-5)
+        action();
       }
     }
 
@@ -677,9 +691,9 @@ const Timeline = observer(() => {
 
   const [progress, setProgress] = useState(0);
 
-  const throttle = useThrottledCallback(() => {
+  const throttle = useThrottledCallback((v: number) => {
     if (!appStateStore.currentVideo) return;
-    appStateStore.currentVideo.setVideoTime(progress)
+    appStateStore.currentVideo.setVideoTime(v)
   }, 100)
 
   if (!appStateStore.currentVideo) return null;
@@ -687,7 +701,7 @@ const Timeline = observer(() => {
   const handleVideoProgressSliderChange = (e: Event, v: number | number[]) => {
     if (!appStateStore.currentVideo || typeof v != "number") return;
     setProgress(v)
-    throttle()
+    throttle(v)
   }
 
   const sliderValue = [appStateStore.currentVideo.trimStart ?? 0, appStateStore.currentVideo.trimEnd ?? 0]
@@ -812,27 +826,33 @@ const RangeButtons = observer(() => {
   if (!appStateStore.currentVideo) return null;
 
   return <Stack direction={"row"} spacing={1}>
-    <Button
-      variant={"outlined"}
-      disabled={appStateStore.currentVideo.startHereDisabled}
-      onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handleStartHere()}
-    >
-      Start Here
-    </Button>
-    <Button
-      variant={"outlined"}
-      disabled={appStateStore.currentVideo.endHereDisabled}
-      onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handleEndHere()}
-    >
-      End Here
-    </Button>
-    <Button
-      variant={"outlined"}
-      onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handlePlayFromStart()}
-      startIcon={<ReplayIcon/>}
-    >
-      Play from start
-    </Button>
+    <Tooltip title="Hotkey: [A]" disableInteractive>
+      <Button
+        variant={"outlined"}
+        disabled={appStateStore.currentVideo.startHereDisabled}
+        onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handleStartHere()}
+      >
+        Start Here
+      </Button>
+    </Tooltip>
+    <Tooltip title="Hotkey: [D]" disableInteractive>
+      <Button
+        variant={"outlined"}
+        disabled={appStateStore.currentVideo.endHereDisabled}
+        onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handleEndHere()}
+      >
+        End Here
+      </Button>
+    </Tooltip>
+    <Tooltip title="Hotkey: [R]" disableInteractive>
+      <Button
+        variant={"outlined"}
+        onClick={() => appStateStore.currentVideo && appStateStore.currentVideo.handlePlayFromStart()}
+        startIcon={<ReplayIcon/>}
+      >
+        Play from start
+      </Button>
+    </Tooltip>
   </Stack>
 })
 
