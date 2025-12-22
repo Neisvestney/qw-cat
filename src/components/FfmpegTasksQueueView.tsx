@@ -179,6 +179,7 @@ const FfmpegTasksQueueView = observer(() => {
           sx: {
             backgroundColor: 'grey.900',
             cursor: 'pointer',
+            minHeight: "52px",
             color: (theme) => theme.palette.getContrastText(theme.palette.grey[900]),
           }
         }

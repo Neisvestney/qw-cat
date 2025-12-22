@@ -7,7 +7,7 @@ import '@fontsource/roboto/400.css';
 import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
 import theme from "./theme.ts";
-import SelectFile from "./components/SelectFile.tsx";
+import StartPage from "./components/StartPage.tsx";
 import VideoView from "./components/VideoView.tsx";
 import FfmpegTasksQueueView from "./components/FfmpegTasksQueueView.tsx";
 import LogsStore, {LogsStoreContext} from "./stores/LogsStore.ts";
@@ -30,8 +30,14 @@ const App = observer(() => {
       <AppStateStoreContext.Provider value={appStateStore}>
         <ThemeProvider theme={theme}>
           <CssBaseline enableColorScheme/>
-          <Container maxWidth={false} sx={{paddingTop: 4, minHeight: "100vh", display: "flex", flexDirection: "column"}}>
-            {appStateStore.currentVideo ? <VideoView/> : <SelectFile/>}
+          <Container maxWidth={false} sx={{
+            paddingTop: 4,
+            minHeight: "100vh",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden"
+          }}>
+            {appStateStore.currentVideo ? <VideoView/> : <StartPage/>}
           </Container>
           <FfmpegTasksQueueView/>
           <LogsView/>
