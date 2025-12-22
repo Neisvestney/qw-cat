@@ -12,8 +12,7 @@ const logLevelsColors = {
 }
 
 function mapLine(entry: LogRecord) {
-  console.log("mapLine", entry)
-  return `${logLevelsColors[entry.level](entry.message)} }`
+  return `${logLevelsColors[entry.level](entry.message)}`
 }
 
 export interface LogRecord {

@@ -22,6 +22,7 @@ import FolderIcon from '@mui/icons-material/Folder';
 import ListIcon from '@mui/icons-material/List';
 import AudiotrackIcon from "@mui/icons-material/Audiotrack";
 import VideocamIcon from "@mui/icons-material/Videocam";
+import DownloadIcon from "@mui/icons-material/Download";
 import {FfmpegTask} from "../generated/bindings/FfmpegTask.ts";
 import CircularProgressWithLabel from "./ui/CircularProgressWithLabel.tsx";
 import {green, blue, red} from "@mui/material/colors";
@@ -70,8 +71,23 @@ const getTaskView = (ffmpegTask: FfmpegTask) => {
         icon: <VideocamIcon/>,
         onClick: () => revealItemInDir(outputPath)
       }
+    case "downloadFfmpeg":
+      return {
+        label: {
+          "queued": "Ffmpeg download queued",
+          "inProgress": "Downloading ffmpeg",
+          "finished": "FFmpeg downloaded",
+          "failed": "FFmpeg download failed - see logs for more info",
+        }[ffmpegTask.status.type],
+        secondary: "",
+        icon: <DownloadIcon/>,
+        onClick: null
+      }
   }
 }
+
+const filterTask = (ffmpegTasks: FfmpegTask) =>
+  ffmpegTasks.taskType.type != "downloadFfmpeg" || !ffmpegTasks.taskType.result?.already_installed
 
 
 const FfmpegTasksQueueView = observer(() => {
@@ -83,7 +99,7 @@ const FfmpegTasksQueueView = observer(() => {
   const DrawerList = (
     <Box sx={{width: 500, padding: 1, display: "flex", flexDirection: "column", height: "100%"}} role="presentation">
       <List sx={{flex: 1, marginBottom: 1, overflow: "auto"}}>
-        {appStateStore.ffmpegTasksQueue.ffmpegTasks.length == 0 &&
+        {appStateStore.ffmpegTasksQueue.ffmpegTasks.filter(filterTask).length == 0 &&
             <ListItem>
                 <ListItemAvatar>
                     <Avatar>
@@ -95,7 +111,7 @@ const FfmpegTasksQueueView = observer(() => {
                 />
             </ListItem>
         }
-        {appStateStore.ffmpegTasksQueue.ffmpegTasks.slice().reverse().map((ffmpegTask, index) => {
+        {appStateStore.ffmpegTasksQueue.ffmpegTasks.slice().reverse().filter(filterTask).map((ffmpegTask, index) => {
             const ItemBody = <>
               <ListItemAvatar>
                 <Avatar sx={{bgcolor: taskStatusColors[ffmpegTask.status.type]}}>

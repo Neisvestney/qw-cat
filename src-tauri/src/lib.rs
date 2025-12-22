@@ -5,14 +5,16 @@ mod ffprobe;
 mod handle_main_window_event;
 mod select_new_video_file_command;
 mod temp_cleanup;
+mod ffmpeg_download;
 
-use crate::ffmpeg::create_ffmpeg_tasks_queue;
+use crate::ffmpeg::{create_ffmpeg_tasks_queue, emit_ffmpeg_queue_status, enqueue_download_ffmpeg_task, FfmpegTasksQueue};
 use crate::ffmpeg_export_command::ffmpeg_export;
 use crate::handle_main_window_event::handle_main_window_event;
 use crate::select_new_video_file_command::select_new_video_file;
 use crate::temp_cleanup::cleanup_temp;
 use std::sync::OnceLock;
-use tauri::{async_runtime, generate_handler, AppHandle, Manager};
+use log::info;
+use tauri::{async_runtime, generate_handler, AppHandle, Listener, Manager};
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
@@ -22,6 +24,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Debug)
                 .with_colors(ColoredLevelConfig::new())
                 .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview))
                 .build(),
@@ -36,6 +39,16 @@ pub fn run() {
             main_window.on_window_event(handle_main_window_event);
 
             async_runtime::spawn(cleanup_temp());
+
+            let app_handle = app.handle().clone();
+            async_runtime::spawn(async move {
+                let queue = app_handle.state::<FfmpegTasksQueue>();
+                enqueue_download_ffmpeg_task(&queue).await;
+            });
+
+            app.listen("frontend-initialized", |_event| {
+                async_runtime::spawn(emit_ffmpeg_queue_status());
+            });
 
             Ok(())
         })

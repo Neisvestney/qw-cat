@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import {observer} from "mobx-react-lite";
 import AppStateStore, {AppStateStoreContext} from "./stores/AppStateStore.ts";
 import {Container, CssBaseline, ThemeProvider} from "@mui/material";
@@ -12,11 +12,18 @@ import VideoView from "./components/VideoView.tsx";
 import FfmpegTasksQueueView from "./components/FfmpegTasksQueueView.tsx";
 import LogsStore, {LogsStoreContext} from "./stores/LogsStore.ts";
 import LogsView from "./components/LogsView.tsx";
+import {emit} from "@tauri-apps/api/event";
 
 
 const App = observer(() => {
   const [appStateStore] = useState(() => new AppStateStore())
   const [logsStore] = useState(() => new LogsStore())
+
+  useEffect(() => {
+    emit("frontend-initialized").then(() => {
+      console.log("Frontend initialized")
+    })
+  }, []);
 
   return (
     <LogsStoreContext.Provider value={logsStore}>

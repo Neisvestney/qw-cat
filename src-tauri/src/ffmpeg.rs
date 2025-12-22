@@ -5,15 +5,17 @@ use crate::ffprobe::{get_video_audio_streams_info, get_video_streams_info};
 use crate::select_new_video_file_command::AudioStreamFilePath;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use ffmpeg_sidecar::command::FfmpegCommand;
+use ffmpeg_sidecar::command::{ffmpeg_is_installed, FfmpegCommand};
 use ffmpeg_sidecar::event::{FfmpegEvent, FfmpegProgress, LogLevel};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::sync::Arc;
+use ffmpeg_sidecar::paths::ffmpeg_path;
 use log::{debug, error, info, log, trace};
 use tauri::window::{ProgressBarState, ProgressBarStatus};
 use tauri::{Emitter, Manager};
 use tokio::sync::{Mutex, MutexGuard, RwLock, oneshot};
+use crate::ffmpeg_download::download_with_progress;
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -54,6 +56,9 @@ pub enum FfmpegTaskType {
         options: ExportOptions,
         result: Option<FfmpegExportVideoTaskResult>,
     },
+    DownloadFfmpeg {
+        result: Option<FfmpegDownloadTaskResult>,
+    }
 }
 
 impl Clone for FfmpegTaskType {
@@ -72,6 +77,9 @@ impl Clone for FfmpegTaskType {
                 options: options.clone(),
                 result: result.clone(),
             },
+            FfmpegTaskType::DownloadFfmpeg {result} => FfmpegTaskType::DownloadFfmpeg {
+                result: result.clone()
+            },
         }
     }
 }
@@ -84,6 +92,11 @@ pub struct FfmpegAudioExtractTaskResult {
 #[derive(Clone, Debug, Serialize, Deserialize, ts_rs::TS)]
 pub struct FfmpegExportVideoTaskResult {
     pub output_path: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, ts_rs::TS)]
+pub struct FfmpegDownloadTaskResult {
+    pub already_installed: bool,
 }
 
 impl FfmpegTaskType {
@@ -388,6 +401,54 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                 }
                 drop(ffmpeg_task);
             }
+            FfmpegTaskType::DownloadFfmpeg { .. } => {
+                drop(ffmpeg_task_guard);
+                let ffmpeg_task_clone = ffmpeg_task.clone();
+
+                let ffmpeg_result = tokio::task::spawn_blocking(move || {
+                    let ffmpeg_is_installed = ffmpeg_is_installed();
+
+                    info!("FFmpeg is installed: {} (ffmpeg path: {:?})", ffmpeg_is_installed, ffmpeg_path().to_str());
+
+                    if ffmpeg_path().to_str() != Some("ffmpeg") && ffmpeg_is_installed {
+                        return Ok(true)
+                    }
+
+                    info!("Downloading ffmpeg...");
+
+                    download_with_progress(|progress| {
+                        let ffmpeg_task_clone = ffmpeg_task_clone.clone();
+                        tokio::spawn(async move {
+                            let mut ffmpeg_task = ffmpeg_task_clone.write().await;
+                            ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
+                            drop(ffmpeg_task);
+                            emit_ffmpeg_queue_status().await;
+                            set_main_window_progress_bar(Some(progress));
+                        });
+                    })?;
+
+                    info!("Ffmpeg downloaded successfully! ({:?})", ffmpeg_path().to_str());
+
+                    Ok::<bool, anyhow::Error>(false)
+                })
+                    .await
+                    .map_err(anyhow::Error::msg)
+                    .flatten();
+
+                let mut ffmpeg_task = ffmpeg_task.write().await;
+                if let Ok(already_installed) = ffmpeg_result {
+                    ffmpeg_task.status = FfmpegTaskStatus::Finished;
+                    if let FfmpegTaskType::DownloadFfmpeg { result, .. } = &mut ffmpeg_task.task_type {
+                        *result = Some(FfmpegDownloadTaskResult {
+                            already_installed,
+                        })
+                    }
+                } else if let Err(e) = ffmpeg_result {
+                    ffmpeg_task.status = FfmpegTaskStatus::Failed;
+                    error!("Failed to download ffmpeg: {e}");
+                }
+                drop(ffmpeg_task);
+            }
         };
 
         emit_ffmpeg_queue_status().await;
@@ -409,7 +470,11 @@ pub async fn enqueue_export_video_task(queue: &FfmpegTasksQueue, options: Export
     enqueue_ffmpeg_task(queue, FfmpegTask::new(FfmpegTaskType::export_video(options))).await;
 }
 
-async fn emit_ffmpeg_queue_status() {
+pub async fn enqueue_download_ffmpeg_task(queue: &FfmpegTasksQueue) {
+    enqueue_ffmpeg_task(queue, FfmpegTask::new(FfmpegTaskType::DownloadFfmpeg {result: None})).await;
+}
+
+pub async fn emit_ffmpeg_queue_status() {
     let app_handle = APP_HANDLE.get().unwrap();
     let queue = app_handle.state::<FfmpegTasksQueue>();
     let queue_lock = queue.lock().await;
