@@ -17,6 +17,31 @@ use tauri::{Emitter, Manager};
 use tokio::sync::{Mutex, MutexGuard, RwLock, oneshot};
 use crate::ffmpeg_download::download_with_progress;
 
+
+const WEB_SUPPORTED_AUDIO_CODECS: [&str; 9] = [
+    "aac",          // AAC (MP4/M4A) – all modern browsers
+    "mp3",          // MP3 – all browsers
+    "opus",         // Opus (WebM/Ogg) – Chrome, Firefox, Edge, Safari (modern)
+    "vorbis",       // Vorbis (Ogg/WebM) – Chrome, Firefox, Edge
+    "flac",         // FLAC – Chrome, Firefox, Edge, Safari
+    "alac",         // ALAC (MP4/M4A) – Safari, modern Chrome
+    "pcm_s16le",    // WAV PCM 16-bit
+    "pcm_s24le",    // WAV PCM 24-bit
+    "pcm_f32le"     // WAV PCM float
+];
+
+const WEB_SUPPORTED_AUDIO_CODECS_CONTAINERS: [&str; 9] = [
+    "m4a",       // aac
+    "mp3",       // mp3
+    "ogg",       // opus
+    "ogg",       // vorbis
+    "flac",      // flac
+    "m4a",       // alac
+    "wav",       // pcm_s16le
+    "wav",       // pcm_s24le
+    "wav"        // pcm_f32le
+];
+
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS, Clone)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -177,22 +202,51 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                 let ffmpeg_result = tokio::task::spawn_blocking(move || {
                     let info = get_video_audio_streams_info(&video_file_path);
                     if let Some(info) = info {
+                        struct AudioStreamMap<'a> {
+                            format: &'a str,
+                            index: i32,
+                            path: String,
+                            codec_name: &'a str,
+                            ffmpeg_map: &'a str,
+                        };
+
+                        let audio_streams: Vec<_> = info.audio_streams
+                            .iter()
+                            .skip(1)
+                            .map(|steam| {
+                                let (format, codec_name, ffmpeg_map) = if let Some(index) = WEB_SUPPORTED_AUDIO_CODECS.iter().position(|c| c == &steam.codec_name) {
+                                    (
+                                        WEB_SUPPORTED_AUDIO_CODECS_CONTAINERS.get(index).unwrap(),
+                                        WEB_SUPPORTED_AUDIO_CODECS.get(index).unwrap(),
+                                        "-c:a copy",
+                                    )
+                                } else {
+                                    (&"m4a", &"aac", "-c:a aac -b:a 192k")
+                                };
+
+                                AudioStreamMap {
+                                    format,
+                                    index: steam.index,
+                                    path: get_audio_file_path(&video_file_path, steam.index, format),
+                                    codec_name,
+                                    ffmpeg_map,
+                                }
+                            })
+                            .collect();
+
                         let result = FfmpegAudioExtractTaskResult {
-                            audio_streams: info
-                                .audio_streams
+                            audio_streams: audio_streams
                                 .iter()
-                                .skip(1)
                                 .map(|s| AudioStreamFilePath {
-                                    path: get_audio_file_path(&video_file_path, s.index, "m4a"),
+                                    path: s.path.clone(),
                                     index: s.index,
                                 })
                                 .collect(),
                         };
 
-                        let maps = result
-                            .audio_streams
+                        let maps = audio_streams
                             .iter()
-                            .map(|s| format!("-map 0:{} -c:a aac -b:a 192k {}", s.index, s.path))
+                            .map(|s| format!("-map 0:{} {} {}", s.index, s.ffmpeg_map, s.path))
                             .collect::<Vec<_>>()
                             .join(" ");
                         
@@ -200,10 +254,16 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             return Some(result);
                         }
 
-                        let mut ffmpeg_child = FfmpegCommand::new()
+                        let mut ffmpeg_command = FfmpegCommand::new();
+
+                        ffmpeg_command
                             .input(&video_file_path)
                             .arg("-y")
-                            .args(maps.split_whitespace())
+                            .args(maps.split_whitespace());
+
+                        info!("Running ffmpeg task: {:?}", ffmpeg_command.print_command());
+
+                        let mut ffmpeg_child = ffmpeg_command
                             .spawn()
                             .unwrap();
 
@@ -351,7 +411,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
 
                         ffmpeg_command.preset("medium").output(&options.output_path);
 
-                        trace!("Running ffmpeg command: {:?}", ffmpeg_command.print_command());
+                        info!("Running ffmpeg command: {:?}", ffmpeg_command.print_command());
 
                         let mut ffmpeg_child = ffmpeg_command.spawn().unwrap();
 
@@ -485,7 +545,7 @@ pub async fn emit_ffmpeg_queue_status() {
 
 fn handle_ffmpeg_progress(p: FfmpegProgress, ffmpeg_task: &Arc<RwLock<FfmpegTask>>, total_duration: f64) {
     let ffmpeg_task_clone = ffmpeg_task.clone();
-    info!("FFmpeg progress event: {:?}", p);
+    debug!("FFmpeg progress event: {:?}", p);
     tokio::spawn(async move {
         let mut ffmpeg_task = ffmpeg_task_clone.write().await;
         let progress = FfmpegTimeDuration::from_str(&p.time)

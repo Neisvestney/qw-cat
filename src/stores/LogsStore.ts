@@ -4,8 +4,8 @@ import {attachLogger, LogLevel} from "@tauri-apps/plugin-log";
 import c from "ansi-colors";
 
 const logLevelsColors = {
-  [LogLevel.Trace]: c.dim,
-  [LogLevel.Debug]: c.dim,
+  [LogLevel.Trace]: c.grey,
+  [LogLevel.Debug]: c.grey,
   [LogLevel.Info]: c.reset,
   [LogLevel.Warn]: c.yellow,
   [LogLevel.Error]: c.red,

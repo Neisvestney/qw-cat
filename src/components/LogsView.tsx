@@ -8,7 +8,6 @@ import {
   DialogTitle,
   Drawer,
 } from "@mui/material";
-import {List, RowComponentProps, useDynamicRowHeight, useListCallbackRef, useListRef} from "react-window";
 import {LazyLog, ScrollFollow} from "@melloware/react-logviewer";
 import c from "ansi-colors";
 
@@ -30,8 +29,6 @@ const LogsView = observer(() => {
 
   useEffect(() => {
     if (!logRef) return;
-
-    console.log(logsStore.lines)
 
     logRef.appendLines(logsStore.lines)
   }, [logRef]);
