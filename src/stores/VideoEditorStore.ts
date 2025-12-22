@@ -130,7 +130,6 @@ class VideoEditorStore {
   }
 
   toggleVideoPlaying() {
-    console.log("toggleVideoPlaying", this.videoState.playing)
     this.setVideoPlaying(!this.videoState.playing);
   }
 

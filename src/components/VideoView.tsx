@@ -21,7 +21,7 @@ import {
   MenuItem,
   Autocomplete,
   InputLabel, Select, FormControl,
-  Input, SliderThumb, Box, Avatar,
+  Input, SliderThumb, Box, Avatar, ToggleButton,
 } from "@mui/material";
 import {css} from '@emotion/react';
 import {convertFileSrc} from "@tauri-apps/api/core";
@@ -36,6 +36,7 @@ import PauseIcon from "@mui/icons-material/Pause";
 import PlayCircleIcon from "@mui/icons-material/PlayCircle";
 import PauseCircleIcon from "@mui/icons-material/PauseCircle";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
+import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import {save} from "@tauri-apps/plugin-dialog";
 import {GpuAcceleration} from "../generated";
 import ReplayIcon from "@mui/icons-material/Replay";
@@ -145,37 +146,13 @@ const VideoOverlayControls = styled('div')(
   `,
 );
 
-const VideoPlayPauseBlinker = styled('div')(
-  ({theme}) => css`
-      opacity: 0;
-      
-      &.blink {
-          animation: pulse 500ms infinite;
-      }
-
-      @keyframes pulse {
-          0% { 
-              transform: scale(1); 
-              opacity: 0;
-          }
-          50% { 
-              transform: scale(1.2);
-              opacity: 0.7;
-          }
-          100% { 
-              transform: scale(1.3);
-              opacity: 0;
-          }
-      }
-  `
-)
 
 const Controls = styled('div')(
   ({theme}) => css`
       display: flex;
       flex-direction: column;
-      min-height: 230px;
       gap: ${theme.spacing(1)};
+      padding-bottom: ${theme.spacing(2)};
   `,
 );
 
@@ -365,16 +342,6 @@ const VideoView = observer(() => {
     return () => window.removeEventListener("keydown", handleKeyPress)
   }, []);
 
-  const [blinkPlayPauseIcon, setBlinkPlayPauseIcon] = useState(false);
-  useEffect(() => {
-    setTimeout(() => setBlinkPlayPauseIcon(true), 10)
-    const timeout = setTimeout(() => setBlinkPlayPauseIcon(false), 500)
-    return () => {
-      setBlinkPlayPauseIcon(false)
-      clearTimeout(timeout)
-    }
-  }, [appStateStore.currentVideo?.videoState.playing]);
-
   if (!appStateStore.currentVideo) return;
 
   const onLoadedMetadata = () => {
@@ -447,13 +414,7 @@ const VideoView = observer(() => {
           onDoubleClick={handleVideoDoubleClicked}
         />
         <VideoOverlayControlsWrapper align={"center"}>
-          <VideoPlayPauseBlinker className={blinkPlayPauseIcon ? "blink" : ""}>
-            {
-              appStateStore.currentVideo.videoState.playing
-                ? <PlayCircleIcon sx={{ fontSize: 80 }}/>
-                : <PauseCircleIcon sx={{ fontSize: 80 }}/>
-            }
-          </VideoPlayPauseBlinker>
+          <VideoPlayPauseBlinker/>
         </VideoOverlayControlsWrapper>
         <VideoOverlayControlsWrapper>
           {appStateStore.currentVideo.videoState.fullscreen &&
@@ -473,7 +434,7 @@ const VideoView = observer(() => {
           <Button variant={"outlined"} endIcon={<FileUploadIcon/>} color={"success"} onClick={handleExportClicked}>Export</Button>
         </Stack>
       </AdditionalButtons>
-      <FormGroup>
+      <FormGroup sx={{minHeight: 84}}>
         {appStateStore.currentVideo.audioStreams.map((audioStream, index) => {
           const audioStreamPath = audioStream.path
           const defaultAudio = audioStream.streamIndex == appStateStore.currentVideo!.defaultAudioStreamIndex
@@ -641,12 +602,15 @@ const TimelineWithControls = observer(() => {
       </IconButton>
     </Box>
     <Timeline/>
-    <Box sx={{marginBottom: "8px"}}>
+    <Box sx={{marginBottom: "8px", marginLeft: 1.3}}>
       {formatTime(appStateStore.currentVideo.videoState.time ?? 0)} / {formatTime(appStateStore.currentVideo.duration ?? 0)}
     </Box>
     <Box sx={{marginBottom: "2px"}}>
       <IconButton onClick={appStateStore.currentVideo?.toggleVideoFullscreen}>
-        <FullscreenIcon/>
+        {appStateStore.currentVideo.videoState.fullscreen
+          ? <FullscreenExitIcon/>
+          : <FullscreenIcon/>
+        }
       </IconButton>
     </Box>
   </Box>
@@ -870,6 +834,55 @@ const RangeButtons = observer(() => {
       Play from start
     </Button>
   </Stack>
+})
+
+const VideoPlayPauseBlinkerWrapper = styled('div')(
+  ({theme}) => css`
+      opacity: 0;
+      
+      &.blink {
+          animation: pulse 500ms infinite;
+      }
+
+      @keyframes pulse {
+          0% { 
+              transform: scale(1); 
+              opacity: 0;
+          }
+          50% { 
+              transform: scale(1.2);
+              opacity: 0.7;
+          }
+          100% { 
+              transform: scale(1.3);
+              opacity: 0;
+          }
+      }
+  `
+)
+
+const VideoPlayPauseBlinker = observer(() => {
+  const appStateStore = useContext(AppStateStoreContext)
+
+  const [blinkPlayPauseIcon, setBlinkPlayPauseIcon] = useState(false);
+  useEffect(() => {
+    setTimeout(() => setBlinkPlayPauseIcon(true), 10)
+    const timeout = setTimeout(() => setBlinkPlayPauseIcon(false), 500)
+    return () => {
+      setBlinkPlayPauseIcon(false)
+      clearTimeout(timeout)
+    }
+  }, [appStateStore.currentVideo?.videoState.playing]);
+
+  if (!appStateStore.currentVideo) return null;
+
+  return <VideoPlayPauseBlinkerWrapper className={blinkPlayPauseIcon ? "blink" : ""}>
+    {
+      appStateStore.currentVideo.videoState.playing
+        ? <PlayCircleIcon sx={{fontSize: 80}}/>
+        : <PauseCircleIcon sx={{fontSize: 80}}/>
+    }
+  </VideoPlayPauseBlinkerWrapper>
 })
 
 export default VideoView;
