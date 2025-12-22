@@ -34,6 +34,7 @@ class LogsStore {
   }
 
   logsWindowOpen = false
+
   setLogsWindowOpen(open: boolean) {
     this.logsWindowOpen = open;
   }

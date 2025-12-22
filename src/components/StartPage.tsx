@@ -35,7 +35,14 @@ const StartPage = observer(() => {
             <Typography gutterBottom variant="h5" component="div">
               Trim video
             </Typography>
-            <Stack direction={"row"} alignItems={"center"} justifyContent={"center"} spacing={1} paddingTop={1} paddingBottom={1}>
+            <Stack
+              direction={"row"}
+              alignItems={"center"}
+              justifyContent={"center"}
+              spacing={1}
+              paddingTop={1}
+              paddingBottom={1}
+            >
               <CatIcon sx={{fontSize: "80px", fill: "gray"}}/>
               <ContentCutIcon sx={{fontSize: "80px", fill: "gray"}}/>
               <TheatersIcon sx={{fontSize: "80px", fill: "gray"}}/>

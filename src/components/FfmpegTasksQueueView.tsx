@@ -4,30 +4,25 @@ import {AppStateStoreContext} from "../stores/AppStateStore.ts";
 import {
   Avatar,
   Box,
-  Button, CircularProgress,
-  Divider,
+  Button,
+  CircularProgress,
   Drawer,
-  IconButton,
   List,
   ListItem,
   ListItemAvatar,
   ListItemButton,
-  ListItemIcon,
   ListItemText,
   Snackbar,
   Stack,
 } from "@mui/material";
-import DeleteIcon from '@mui/icons-material/Delete';
-import FolderIcon from '@mui/icons-material/Folder';
 import ListIcon from '@mui/icons-material/List';
 import AudiotrackIcon from "@mui/icons-material/Audiotrack";
 import VideocamIcon from "@mui/icons-material/Videocam";
 import DownloadIcon from "@mui/icons-material/Download";
 import {FfmpegTask} from "../generated/bindings/FfmpegTask.ts";
 import CircularProgressWithLabel from "./ui/CircularProgressWithLabel.tsx";
-import {green, blue, red} from "@mui/material/colors";
+import {blue, green, red} from "@mui/material/colors";
 import {revealItemInDir} from '@tauri-apps/plugin-opener';
-import {Audiotrack} from "@mui/icons-material";
 import {LogsStoreContext} from "../stores/LogsStore.ts";
 
 const getFfmpegTaskLabel = (ffmpegTask: FfmpegTask | null) => {
@@ -103,7 +98,7 @@ const FfmpegTasksQueueView = observer(() => {
             <ListItem>
                 <ListItemAvatar>
                     <Avatar>
-                      <ListIcon/>
+                        <ListIcon/>
                     </Avatar>
                 </ListItemAvatar>
                 <ListItemText

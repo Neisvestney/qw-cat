@@ -1,13 +1,7 @@
 import {observer} from "mobx-react-lite";
-import {useContext, useEffect, useRef, useState} from "react";
+import {useContext, useEffect, useState} from "react";
 import {LogsStoreContext} from "../stores/LogsStore.ts";
-import {
-  Box, Button, Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Drawer,
-} from "@mui/material";
+import {Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,} from "@mui/material";
 import {LazyLog, ScrollFollow} from "@melloware/react-logviewer";
 import c from "ansi-colors";
 
@@ -50,11 +44,11 @@ const LogsView = observer(() => {
     <Dialog fullScreen open={logsStore.logsWindowOpen} onClose={handleClose} sx={{zIndex: 1460}}>
       <DialogTitle>Logs</DialogTitle>
       <DialogContent>
-        <Box sx={{ height: "100%" }} ref={setBoxRef}>
-          <div style={{ height: boxHeight }}>
+        <Box sx={{height: "100%"}} ref={setBoxRef}>
+          <div style={{height: boxHeight}}>
             <ScrollFollow
               startFollowing={true}
-              render={({ follow, onScroll }) => (
+              render={({follow, onScroll}) => (
                 <LazyLog
                   selectableLines
                   enableLineNumbers={true}

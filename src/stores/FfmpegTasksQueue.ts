@@ -1,8 +1,6 @@
 import {makeAutoObservable, runInAction} from "mobx";
 import {listen} from "@tauri-apps/api/event";
 import {FfmpegTask} from "../generated/bindings/FfmpegTask.ts";
-import {Channel} from "@tauri-apps/api/core";
-import {SelectNewVideoFileEvent} from "../generated/bindings/SelectNewVideoFileEvent.ts";
 
 class FfmpegTasksQueue {
   ffmpegTasks: FfmpegTask[] = []

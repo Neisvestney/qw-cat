@@ -2,26 +2,31 @@ import {observer} from "mobx-react-lite";
 import React, {ChangeEvent, CSSProperties, useContext, useEffect, useRef, useState} from "react";
 import {AppStateStoreContext} from "../stores/AppStateStore.ts";
 import {
+  Autocomplete,
+  Box,
   Button,
-  Slider,
-  Stack,
-  styled,
-  Dialog,
-  DialogTitle,
-  DialogActions,
-  DialogContent,
-  TextField,
-  FormGroup,
-  FormControlLabel,
   Checkbox,
   CircularProgress,
-  InputAdornment,
-  IconButton,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormControlLabel,
+  FormGroup,
   Grid,
+  IconButton,
+  Input,
+  InputAdornment,
+  InputLabel,
   MenuItem,
-  Autocomplete,
-  InputLabel, Select, FormControl,
-  Input, SliderThumb, Box, Avatar, ToggleButton, Tooltip,
+  Select,
+  Slider,
+  SliderThumb,
+  Stack,
+  styled,
+  TextField,
+  Tooltip,
 } from "@mui/material";
 import {css} from '@emotion/react';
 import {convertFileSrc} from "@tauri-apps/api/core";
@@ -40,9 +45,10 @@ import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import {save} from "@tauri-apps/plugin-dialog";
 import {GpuAcceleration} from "../generated";
 import ReplayIcon from "@mui/icons-material/Replay";
-import {VolumeDown, VolumeUp} from "@mui/icons-material";
+import VolumeDown from "@mui/icons-material/VolumeDown";
+import VolumeUp from "@mui/icons-material/VolumeUp";
 import {AudioStream} from "../stores/VideoEditorStore.ts";
-import {useDebouncedCallback, useThrottledCallback} from "use-debounce";
+import {useThrottledCallback} from "use-debounce";
 import {gainToGainValue, useVideoGain} from "../lib/useVideoGain.ts";
 
 const ViewContainer = styled('div')(
@@ -79,13 +85,13 @@ const Video = styled('video')(
   ({theme}) => css`
       max-width: 100%;
       max-height: 100%;
-      
+
       &::-webkit-media-controls-enclosure {
-          display:none !important;
+          display: none !important;
       }
-      
+
       &::-webkit-media-controls {
-          display:none !important;
+          display: none !important;
       }
   `,
 );
@@ -102,9 +108,9 @@ const VideoOverlayControlsWrapper = styled('div')<VideoOverlayControlsWrapperPro
       bottom: 0;
       right: 0;
       left: 0;
-      
+
       pointer-events: none;
-      
+
       display: flex;
       align-items: ${align ?? "end"};
       justify-content: center;
@@ -140,6 +146,7 @@ const VideoOverlayControls = styled('div')(
 
       transition: opacity 0.3s;
       opacity: 0;
+
       &:hover {
           opacity: 1;
       }
@@ -248,7 +255,7 @@ const VideoView = observer(() => {
 
   useEffect(() => {
     if (backConfirmation) {
-      const t = setTimeout(() => setBackConfirmation(false), 2000)
+      const t = setTimeout(() => setBackConfirmation(false), 3500)
       return () => clearTimeout(t)
     }
   }, [backConfirmation]);
@@ -382,13 +389,15 @@ const VideoView = observer(() => {
   const handleExportModalSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     handleExportModalClose()
-    console.log("Exporting video...")
     appStateStore.currentVideo?.exportVideo()
   }
 
   const handleBackClicked = () => {
     audioCtx.current?.resume()
-    if (!backConfirmation) {setBackConfirmation(true); return}
+    if (!backConfirmation) {
+      setBackConfirmation(true);
+      return
+    }
 
     appStateStore.closeCurrentVideo()
   }
@@ -432,9 +441,9 @@ const VideoView = observer(() => {
         </VideoOverlayControlsWrapper>
         <VideoOverlayControlsWrapper>
           {appStateStore.currentVideo.videoState.fullscreen &&
-            <VideoOverlayControls>
-                <TimelineWithControls/>
-            </VideoOverlayControls>
+              <VideoOverlayControls>
+                  <TimelineWithControls/>
+              </VideoOverlayControls>
           }
         </VideoOverlayControlsWrapper>
       </VideoWrapper>
@@ -444,8 +453,22 @@ const VideoView = observer(() => {
       <AdditionalButtons>
         <RangeButtons/>
         <Stack direction={"row"} spacing={1}>
-          <Button variant={"outlined"} startIcon={<ArrowBackIcon/>} color={backConfirmation ? "error" : "info"} onClick={handleBackClicked}>{backConfirmation ? "Are you sure?" : "Back"}</Button>
-          <Button variant={"outlined"} endIcon={<FileUploadIcon/>} color={"success"} onClick={handleExportClicked}>Export</Button>
+          <Button
+            variant={"outlined"}
+            startIcon={<ArrowBackIcon/>}
+            color={backConfirmation ? "error" : "info"}
+            onClick={handleBackClicked}
+          >
+            {backConfirmation ? "Are you sure?" : "Back"}
+          </Button>
+          <Button
+            variant={"outlined"}
+            endIcon={<FileUploadIcon/>}
+            color={"success"}
+            onClick={handleExportClicked}
+          >
+            Export
+          </Button>
         </Stack>
       </AdditionalButtons>
       <FormGroup sx={{minHeight: 84}}>
@@ -525,7 +548,7 @@ const VideoView = observer(() => {
                 options={[...(appStateStore.currentVideo.exportGpuAcceleration == "nvidia" ? NVIDIA_VIDEO_ENCODERS : []), ...VIDEO_ENCODERS]}
                 value={appStateStore.currentVideo.exportVideoEncoder}
                 onChange={(e, newValue) => appStateStore.currentVideo?.setExportVideoEncoder(newValue)}
-                renderInput={(params) => <TextField {...params} fullWidth label="Video encoder" />}
+                renderInput={(params) => <TextField {...params} fullWidth label="Video encoder"/>}
               />
             </Grid>
             <Grid size={4}>
@@ -534,7 +557,7 @@ const VideoView = observer(() => {
                 options={VIDEO_RESOLUTIONS}
                 value={appStateStore.currentVideo.exportResolution}
                 onChange={(e, newValue) => appStateStore.currentVideo?.setExportResolution(newValue ?? "")}
-                renderInput={(params) => <TextField {...params} required fullWidth label="Resolution" />}
+                renderInput={(params) => <TextField {...params} required fullWidth label="Resolution"/>}
               />
             </Grid>
             <Grid size={4}>
@@ -633,7 +656,7 @@ const TimelineWithControls = observer(() => {
 const TimelineSlider = styled(Slider)(
   ({theme}) => css`
       pointer-events: none;
-      
+
       & .MuiSlider-thumb {
           pointer-events: auto;
           height: 27px;
@@ -641,19 +664,19 @@ const TimelineSlider = styled(Slider)(
           background-color: #fff;
           border: 1px solid ${theme.palette.primary.dark};
           border-radius: 5px;
-    
+
           //&:hover {
           //    boxShadow: 0 0 0 8px rgba(58, 133, 137, 0.16);
           //}
-          
+
           &[data-index='0'] { // Left thumb
-            transform: translate(-100%, -50%);
+              transform: translate(-100%, -50%);
           }
-    
+
           &[data-index='1'] { // Right thumb
               transform: translate(0, -50%);
           }
-    
+
           & .bar {
               height: 12px;
               width: 2px;
@@ -662,7 +685,7 @@ const TimelineSlider = styled(Slider)(
               margin-right: 1px;
           }
       }
-      
+
       & .MuiSlider-track {
           border-radius: 0;
       }
@@ -673,7 +696,7 @@ const VideoProgressSlider = styled(Slider)(
   ({theme}) => css`
       & .MuiSlider-thumb {
           top: -15px;
-          
+
           & > .pin {
               position: relative;
               width: 4px;
@@ -753,22 +776,22 @@ const Timeline = observer(() => {
 })
 
 function TimelineTrimThumbComponent(props: React.HTMLAttributes<unknown>) {
-  const { children, ...other } = props;
+  const {children, ...other} = props;
   return (
     <SliderThumb {...other}>
       {children}
-      <span className="bar" />
-      <span className="bar" />
+      <span className="bar"/>
+      <span className="bar"/>
     </SliderThumb>
   );
 }
 
 function VideoProgressThumbComponent(props: React.HTMLAttributes<unknown>) {
-  const { children, ...other } = props;
+  const {children, ...other} = props;
   return (
     <SliderThumb {...other}>
       {children}
-      <span className="pin" />
+      <span className="pin"/>
     </SliderThumb>
   );
 }
@@ -777,7 +800,7 @@ function gainLabelFormat(v: number) {
   return `${v.toFixed(1)}%`
 }
 
-const AudioVolumeSlider = observer(({audioStream}: {audioStream: AudioStream}) => {
+const AudioVolumeSlider = observer(({audioStream}: { audioStream: AudioStream }) => {
   const appStateStore = useContext(AppStateStoreContext)
 
   if (!appStateStore.currentVideo) return null;
@@ -787,8 +810,8 @@ const AudioVolumeSlider = observer(({audioStream}: {audioStream: AudioStream}) =
     appStateStore.currentVideo?.updateAudioStreamGain(audioStream.streamIndex, !isNaN(number) ? number : 0)
   }
 
-  return <Stack spacing={2} direction="row" sx={{ alignItems: 'center', width: 400 }}>
-    <VolumeDown />
+  return <Stack spacing={2} direction="row" sx={{alignItems: 'center', width: 400}}>
+    <VolumeDown/>
     <Slider
       value={audioStream.gain}
       onChange={(e, v) => appStateStore.currentVideo?.updateAudioStreamGain(audioStream.streamIndex, v)}
@@ -803,7 +826,7 @@ const AudioVolumeSlider = observer(({audioStream}: {audioStream: AudioStream}) =
         {value: 100}
       ]}
     />
-    <VolumeUp />
+    <VolumeUp/>
     <Input
       value={audioStream.gain}
       size="small"
@@ -859,21 +882,21 @@ const RangeButtons = observer(() => {
 const VideoPlayPauseBlinkerWrapper = styled('div')(
   ({theme}) => css`
       opacity: 0;
-      
+
       &.blink {
           animation: pulse 500ms infinite;
       }
 
       @keyframes pulse {
-          0% { 
-              transform: scale(1); 
+          0% {
+              transform: scale(1);
               opacity: 0;
           }
-          50% { 
+          50% {
               transform: scale(1.2);
               opacity: 0.7;
           }
-          100% { 
+          100% {
               transform: scale(1.3);
               opacity: 0;
           }

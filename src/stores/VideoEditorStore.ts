@@ -1,11 +1,10 @@
-import {makeAutoObservable, runInAction, trace} from "mobx";
+import {makeAutoObservable} from "mobx";
 import {VideoAudioStreamsInfo} from "../generated/bindings/VideoAudioStreamsInfo.ts";
 import {AudioStreamFilePath} from "../generated/bindings/AudioStreamFilePath.ts";
 import addPostfixToFilename from "../lib/addPostfixToFilename.ts";
 import replaceExtension from "../lib/replaceExtension.ts";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
 import {ffmpegExport, GpuAcceleration} from "../generated";
-import theme from "../theme.ts";
 import {gainToGainValue} from "../lib/useVideoGain.ts";
 
 export interface AudioStream {
@@ -71,7 +70,7 @@ class VideoEditorStore {
   }
 
   handleStartHere() {
-    if(this.startHereDisabled) return;
+    if (this.startHereDisabled) return;
     this.trimStart = this.videoState.time;
   }
 
@@ -81,7 +80,7 @@ class VideoEditorStore {
   }
 
   handleEndHere() {
-    if(this.endHereDisabled) return;
+    if (this.endHereDisabled) return;
     this.trimEnd = this.videoState.time;
   }
 
@@ -159,6 +158,7 @@ class VideoEditorStore {
   }
 
   exportPath: string = ""
+
   setExportPath(path: string) {
     this.exportPath = path;
 
@@ -167,32 +167,38 @@ class VideoEditorStore {
   }
 
   exportFormat: string = ""
+
   setExportFormat(format: string) {
     this.exportFormat = format;
     this.exportPath = replaceExtension(this.exportPath, this.exportFormat);
   }
 
   exportResolution: string = "1920x1080"
+
   setExportResolution(resolution: string) {
     this.exportResolution = resolution;
   }
 
   exportBitrateKbps: number | null = null
+
   setExportBitrateKbps(bitrateKbps: number | null) {
     this.exportBitrateKbps = bitrateKbps;
   }
 
   exportFrameRate: number | null = 60
+
   setExportFrameRate(exportFrameRate: number | null) {
     this.exportFrameRate = exportFrameRate;
   }
 
   exportVideoEncoder: string | null = null
+
   setExportVideoEncoder(exportVideoEncoder: string | null) {
     this.exportVideoEncoder = exportVideoEncoder;
   }
 
   exportGpuAcceleration: GpuAcceleration | null = null
+
   setExportGpuAcceleration(exportGpuAcceleration: GpuAcceleration | null) {
     this.exportGpuAcceleration = exportGpuAcceleration;
 

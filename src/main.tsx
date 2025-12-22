@@ -7,6 +7,6 @@ attachConsole().then(() => console.log("Attached main process console"));
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <App/>
   </React.StrictMode>,
 );
