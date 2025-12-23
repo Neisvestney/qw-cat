@@ -32,7 +32,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "targets": "all"
+    "targets": ["nsis"],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   },
   "identifier": "com.qw-cat.app",
   "plugins": {
@@ -48,6 +53,6 @@
       "visualizeDeps": false
     }
   },
-  "productName": "qw-cat",
+  "productName": "Qw Cat",
   "version": "0.1.0"
 }
