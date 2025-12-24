@@ -1,7 +1,8 @@
 import React from "react";
-import {makeAutoObservable} from "mobx";
+import {makeAutoObservable, runInAction} from "mobx";
 import {attachLogger, LogLevel} from "@tauri-apps/plugin-log";
 import c from "ansi-colors";
+import {getLogs} from "../generated";
 
 const logLevelsColors = {
   [LogLevel.Trace]: c.grey,
@@ -12,7 +13,7 @@ const logLevelsColors = {
 }
 
 function mapLine(entry: LogRecord) {
-  return `${logLevelsColors[entry.level](entry.message)}`
+  return `${logLevelsColors[entry.level](c.stripColor(entry.message))}`
 }
 
 export interface LogRecord {
@@ -27,6 +28,7 @@ class LogsStore {
     makeAutoObservable(this, {}, {autoBind: true})
 
     attachLogger(this.addLogEntry).then(() => {})
+    this.fetchLogs()
   }
 
   addLogEntry(entry: LogRecord) {
@@ -46,6 +48,13 @@ class LogsStore {
   get lastLine() {
     const entry = this.logs[this.logs.length - 1]
     return entry ? mapLine(entry) : ""
+  }
+
+  async fetchLogs() {
+    const log = await getLogs()
+    runInAction(() => {
+      this.logs.push(...log as unknown as LogRecord[])
+    })
   }
 }
 

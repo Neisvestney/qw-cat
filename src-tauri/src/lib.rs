@@ -7,6 +7,7 @@ mod handle_main_window_event;
 mod integrated_server;
 mod select_new_video_file_command;
 mod temp_cleanup;
+mod logs_store;
 
 use crate::ffmpeg::{FfmpegTasksQueue, create_ffmpeg_tasks_queue, emit_ffmpeg_queue_status, enqueue_download_ffmpeg_task};
 use crate::ffmpeg_export_command::ffmpeg_export;
@@ -18,6 +19,7 @@ use std::ops::Deref;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Listener, Manager, async_runtime, generate_handler};
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
+use crate::logs_store::{get_logs, get_logs_store_target, LogsStore};
 
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
@@ -29,6 +31,7 @@ pub fn run() {
                 .level(log::LevelFilter::Debug)
                 .with_colors(ColoredLevelConfig::new())
                 .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview))
+                .target(tauri_plugin_log::Target::new(get_logs_store_target()))
                 .build(),
         )
         .plugin(prevent_default())
@@ -60,7 +63,8 @@ pub fn run() {
         })
         .manage(create_ffmpeg_tasks_queue())
         .manage(IntegratedServerState::new())
-        .invoke_handler(generate_handler![select_new_video_file, ffmpeg_export, get_integrated_server_state])
+        .manage(LogsStore::new())
+        .invoke_handler(generate_handler![select_new_video_file, ffmpeg_export, get_integrated_server_state, get_logs])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
