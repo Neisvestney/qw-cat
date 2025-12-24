@@ -1,17 +1,17 @@
-use std::path::{Path, PathBuf};
 use anyhow::Result;
 use ffmpeg_sidecar::command::ffmpeg_is_installed;
 use ffmpeg_sidecar::download::{ffmpeg_download_url, unpack_ffmpeg};
 use ffmpeg_sidecar::paths::sidecar_dir;
 use log::debug;
+use std::path::{Path, PathBuf};
 
-pub fn download_with_progress(
-    progress_callback: impl Fn(f64),
-) -> Result<()> {
+pub fn download_with_progress(progress_callback: impl Fn(f64)) -> Result<()> {
     progress_callback(0.0);
     let download_url = ffmpeg_download_url()?;
     let destination = sidecar_dir()?;
-    let archive_path = download_ffmpeg_package_with_progress(download_url, &destination, |(total, downloaded)| progress_callback(downloaded as f64 / total as f64))?;
+    let archive_path = download_ffmpeg_package_with_progress(download_url, &destination, |(total, downloaded)| {
+        progress_callback(downloaded as f64 / total as f64)
+    })?;
     progress_callback(0.0);
     unpack_ffmpeg(&archive_path, &destination)?;
     progress_callback(1.0);
@@ -23,21 +23,15 @@ pub fn download_with_progress(
     Ok(())
 }
 
-pub fn download_ffmpeg_package_with_progress(
-    url: &str,
-    download_dir: &Path,
-    progress_callback: impl Fn((u64, u64)),
-) -> Result<PathBuf> {
+pub fn download_ffmpeg_package_with_progress(url: &str, download_dir: &Path, progress_callback: impl Fn((u64, u64))) -> Result<PathBuf> {
     use anyhow::Context;
     use std::{
         fs::File,
-        io::{copy, Read},
+        io::{Read, copy},
         path::Path,
     };
 
-    let filename = Path::new(url)
-        .file_name()
-        .context("Failed to get filename")?;
+    let filename = Path::new(url).file_name().context("Failed to get filename")?;
 
     let archive_path = download_dir.join(filename);
 
@@ -50,8 +44,7 @@ pub fn download_ffmpeg_package_with_progress(
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(0);
 
-    let mut file =
-        File::create(&archive_path).context("Failed to create file for ffmpeg download")?;
+    let mut file = File::create(&archive_path).context("Failed to create file for ffmpeg download")?;
 
     // Wrapper to track progress during io::copy
     struct ProgressReader<R, F> {

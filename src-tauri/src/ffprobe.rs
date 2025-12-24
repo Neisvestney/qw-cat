@@ -71,6 +71,7 @@ pub fn get_video_audio_streams_info(path: impl AsRef<str>) -> Option<VideoAudioS
         return None;
     }
 
+    #[rustfmt::skip]
     let output = std::process::Command::new(ffprobe_path)
         .create_no_window()
         .args([
@@ -96,6 +97,7 @@ pub fn get_video_streams_info(path: impl AsRef<str>) -> Option<FfprobeOutput> {
         return None;
     }
 
+    #[rustfmt::skip]
     let output = std::process::Command::new(ffprobe_path)
         .create_no_window()
         .args([

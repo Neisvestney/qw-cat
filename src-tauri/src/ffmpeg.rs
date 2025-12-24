@@ -1,45 +1,44 @@
 use crate::APP_HANDLE;
+use crate::ffmpeg_download::download_with_progress;
 use crate::ffmpeg_export_command::{ExportOptions, GpuAcceleration};
 use crate::ffmpeg_time_duration::FfmpegTimeDuration;
 use crate::ffprobe::{get_video_audio_streams_info, get_video_streams_info};
 use crate::select_new_video_file_command::AudioStreamFilePath;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use ffmpeg_sidecar::command::{ffmpeg_is_installed, FfmpegCommand};
+use ffmpeg_sidecar::command::{FfmpegCommand, ffmpeg_is_installed};
 use ffmpeg_sidecar::event::{FfmpegEvent, FfmpegProgress, LogLevel};
+use ffmpeg_sidecar::paths::ffmpeg_path;
+use log::{debug, error, info, log, trace};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::sync::Arc;
-use ffmpeg_sidecar::paths::ffmpeg_path;
-use log::{debug, error, info, log, trace};
 use tauri::window::{ProgressBarState, ProgressBarStatus};
 use tauri::{Emitter, Manager};
 use tokio::sync::{Mutex, MutexGuard, RwLock, oneshot};
-use crate::ffmpeg_download::download_with_progress;
-
 
 const WEB_SUPPORTED_AUDIO_CODECS: [&str; 9] = [
-    "aac",          // AAC (MP4/M4A) – all modern browsers
-    "mp3",          // MP3 – all browsers
-    "opus",         // Opus (WebM/Ogg) – Chrome, Firefox, Edge, Safari (modern)
-    "vorbis",       // Vorbis (Ogg/WebM) – Chrome, Firefox, Edge
-    "flac",         // FLAC – Chrome, Firefox, Edge, Safari
-    "alac",         // ALAC (MP4/M4A) – Safari, modern Chrome
-    "pcm_s16le",    // WAV PCM 16-bit
-    "pcm_s24le",    // WAV PCM 24-bit
-    "pcm_f32le"     // WAV PCM float
+    "aac",       // AAC (MP4/M4A) – all modern browsers
+    "mp3",       // MP3 – all browsers
+    "opus",      // Opus (WebM/Ogg) – Chrome, Firefox, Edge, Safari (modern)
+    "vorbis",    // Vorbis (Ogg/WebM) – Chrome, Firefox, Edge
+    "flac",      // FLAC – Chrome, Firefox, Edge, Safari
+    "alac",      // ALAC (MP4/M4A) – Safari, modern Chrome
+    "pcm_s16le", // WAV PCM 16-bit
+    "pcm_s24le", // WAV PCM 24-bit
+    "pcm_f32le", // WAV PCM float
 ];
 
 const WEB_SUPPORTED_AUDIO_CODECS_CONTAINERS: [&str; 9] = [
-    "m4a",       // aac
-    "mp3",       // mp3
-    "ogg",       // opus
-    "ogg",       // vorbis
-    "flac",      // flac
-    "m4a",       // alac
-    "wav",       // pcm_s16le
-    "wav",       // pcm_s24le
-    "wav"        // pcm_f32le
+    "m4a",  // aac
+    "mp3",  // mp3
+    "ogg",  // opus
+    "ogg",  // vorbis
+    "flac", // flac
+    "m4a",  // alac
+    "wav",  // pcm_s16le
+    "wav",  // pcm_s24le
+    "wav",  // pcm_f32le
 ];
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS, Clone)]
@@ -83,7 +82,7 @@ pub enum FfmpegTaskType {
     },
     DownloadFfmpeg {
         result: Option<FfmpegDownloadTaskResult>,
-    }
+    },
 }
 
 impl Clone for FfmpegTaskType {
@@ -102,9 +101,7 @@ impl Clone for FfmpegTaskType {
                 options: options.clone(),
                 result: result.clone(),
             },
-            FfmpegTaskType::DownloadFfmpeg {result} => FfmpegTaskType::DownloadFfmpeg {
-                result: result.clone()
-            },
+            FfmpegTaskType::DownloadFfmpeg { result } => FfmpegTaskType::DownloadFfmpeg { result: result.clone() },
         }
     }
 }
@@ -210,19 +207,21 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             ffmpeg_map: &'a str,
                         };
 
-                        let audio_streams: Vec<_> = info.audio_streams
+                        let audio_streams: Vec<_> = info
+                            .audio_streams
                             .iter()
                             .skip(1)
                             .map(|steam| {
-                                let (format, codec_name, ffmpeg_map) = if let Some(index) = WEB_SUPPORTED_AUDIO_CODECS.iter().position(|c| c == &steam.codec_name) {
-                                    (
-                                        WEB_SUPPORTED_AUDIO_CODECS_CONTAINERS.get(index).unwrap(),
-                                        WEB_SUPPORTED_AUDIO_CODECS.get(index).unwrap(),
-                                        "-c:a copy",
-                                    )
-                                } else {
-                                    (&"m4a", &"aac", "-c:a aac -b:a 192k")
-                                };
+                                let (format, codec_name, ffmpeg_map) =
+                                    if let Some(index) = WEB_SUPPORTED_AUDIO_CODECS.iter().position(|c| c == &steam.codec_name) {
+                                        (
+                                            WEB_SUPPORTED_AUDIO_CODECS_CONTAINERS.get(index).unwrap(),
+                                            WEB_SUPPORTED_AUDIO_CODECS.get(index).unwrap(),
+                                            "-c:a copy",
+                                        )
+                                    } else {
+                                        (&"m4a", &"aac", "-c:a aac -b:a 192k")
+                                    };
 
                                 AudioStreamMap {
                                     format,
@@ -249,23 +248,18 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             .map(|s| format!("-map 0:{} {} {}", s.index, s.ffmpeg_map, s.path))
                             .collect::<Vec<_>>()
                             .join(" ");
-                        
+
                         if maps.is_empty() {
                             return Some(result);
                         }
 
                         let mut ffmpeg_command = FfmpegCommand::new();
 
-                        ffmpeg_command
-                            .input(&video_file_path)
-                            .arg("-y")
-                            .args(maps.split_whitespace());
+                        ffmpeg_command.input(&video_file_path).arg("-y").args(maps.split_whitespace());
 
                         info!("Running ffmpeg task: {:?}", ffmpeg_command.print_command());
 
-                        let mut ffmpeg_child = ffmpeg_command
-                            .spawn()
-                            .unwrap();
+                        let mut ffmpeg_child = ffmpeg_command.spawn().unwrap();
 
                         ffmpeg_child.iter().unwrap().for_each(|e| match e {
                             FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, e) => {
@@ -285,18 +279,14 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
 
                         let successful = exit_status.map(|s| s.success()).unwrap_or(false);
 
-                        if successful {
-                            Some(result)
-                        } else {
-                            None
-                        }
+                        if successful { Some(result) } else { None }
                     } else {
                         None
                     }
                 })
-                    .await
-                    .ok()
-                    .flatten();
+                .await
+                .ok()
+                .flatten();
 
                 let mut ffmpeg_task = ffmpeg_task.write().await;
                 if ffmpeg_result.is_some() {
@@ -446,9 +436,9 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                         None
                     }
                 })
-                    .await
-                    .ok()
-                    .flatten();
+                .await
+                .ok()
+                .flatten();
 
                 let mut ffmpeg_task = ffmpeg_task.write().await;
                 if ffmpeg_result.is_some() {
@@ -471,7 +461,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                     info!("FFmpeg is installed: {} (ffmpeg path: {:?})", ffmpeg_is_installed, ffmpeg_path().to_str());
 
                     if ffmpeg_is_installed {
-                        return Ok(true)
+                        return Ok(true);
                     }
 
                     info!("Downloading ffmpeg...");
@@ -491,17 +481,15 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
 
                     Ok::<bool, anyhow::Error>(false)
                 })
-                    .await
-                    .map_err(anyhow::Error::msg)
-                    .flatten();
+                .await
+                .map_err(anyhow::Error::msg)
+                .flatten();
 
                 let mut ffmpeg_task = ffmpeg_task.write().await;
                 if let Ok(already_installed) = ffmpeg_result {
                     ffmpeg_task.status = FfmpegTaskStatus::Finished;
                     if let FfmpegTaskType::DownloadFfmpeg { result, .. } = &mut ffmpeg_task.task_type {
-                        *result = Some(FfmpegDownloadTaskResult {
-                            already_installed,
-                        })
+                        *result = Some(FfmpegDownloadTaskResult { already_installed })
                     }
                 } else if let Err(e) = ffmpeg_result {
                     ffmpeg_task.status = FfmpegTaskStatus::Failed;
@@ -531,7 +519,7 @@ pub async fn enqueue_export_video_task(queue: &FfmpegTasksQueue, options: Export
 }
 
 pub async fn enqueue_download_ffmpeg_task(queue: &FfmpegTasksQueue) {
-    enqueue_ffmpeg_task(queue, FfmpegTask::new(FfmpegTaskType::DownloadFfmpeg {result: None})).await;
+    enqueue_ffmpeg_task(queue, FfmpegTask::new(FfmpegTaskType::DownloadFfmpeg { result: None })).await;
 }
 
 pub async fn emit_ffmpeg_queue_status() {
