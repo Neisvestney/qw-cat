@@ -231,7 +231,7 @@ const VideoView = observer(() => {
       const a = appStateStore.currentVideo.audioStreams
         .filter(x => x.streamIndex != appStateStore.currentVideo!.defaultAudioStreamIndex)
         .filter(x => x.path)
-        .map(x => convertFilePath(x.path!));
+        .map(x => convertFilePath(x.path!, appStateStore.integratedServerStatus?.port));
 
       setAudioUrls(a)
     })
@@ -251,6 +251,8 @@ const VideoView = observer(() => {
       dispose2()
     };
   }, []);
+
+  console.log(appStateStore)
 
   useSyncedMediaTracks(audioUrls, appStateStore.currentVideo?.audioStreams.length ?? 0, audioGains, videoElementRef)
 

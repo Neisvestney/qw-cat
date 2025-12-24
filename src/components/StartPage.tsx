@@ -1,7 +1,19 @@
 import {observer} from "mobx-react-lite";
 import {useContext} from "react";
 import {AppStateStoreContext} from "../stores/AppStateStore.ts";
-import {Box, Button, Card, CardActionArea, CardActions, CardContent, Grid, Stack, Typography} from "@mui/material";
+import {
+  Backdrop,
+  Box,
+  Button,
+  Card,
+  CardActionArea,
+  CardActions,
+  CardContent,
+  CircularProgress,
+  Grid,
+  Stack,
+  Typography
+} from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder"
 import ContentCutIcon from '@mui/icons-material/ContentCut';
 import TheatersIcon from '@mui/icons-material/Theaters';
@@ -53,7 +65,6 @@ const StartPage = observer(() => {
               component={"span"}
               size="small"
               endIcon={<FolderIcon/>}
-              loading={store.fileProcessingInfo}
               disabled={store.selectNewVideoFileDisabled}
             >
               Select video file
@@ -62,6 +73,12 @@ const StartPage = observer(() => {
         </CardActionArea>
       </Card>
     </Box>
+    <Backdrop
+      sx={(theme) => ({ color: '#fff', zIndex: theme.zIndex.snackbar + 1 })}
+      open={store.fileProcessingInfo}
+    >
+      <CircularProgress color="inherit" />
+    </Backdrop>
   </Grid>
 })
 

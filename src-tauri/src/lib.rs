@@ -15,10 +15,9 @@ use crate::handle_main_window_event::handle_main_window_event;
 use crate::select_new_video_file_command::select_new_video_file;
 use crate::temp_cleanup::cleanup_temp;
 use std::sync::OnceLock;
-use log::info;
 use tauri::{async_runtime, generate_handler, AppHandle, Listener, Manager};
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
-use crate::integrated_server::{start_integrated_server, IntegratedServerState};
+use crate::integrated_server::{get_integrated_server_state, start_integrated_server, IntegratedServerState};
 
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
@@ -61,7 +60,7 @@ pub fn run() {
         })
         .manage(create_ffmpeg_tasks_queue())
         .manage(IntegratedServerState::new())
-        .invoke_handler(generate_handler![select_new_video_file, ffmpeg_export])
+        .invoke_handler(generate_handler![select_new_video_file, ffmpeg_export, get_integrated_server_state])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

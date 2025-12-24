@@ -1,9 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import {attachConsole} from "@tauri-apps/plugin-log";
 import { warn, debug, trace, info, error } from '@tauri-apps/plugin-log';
-import {stringifyCircular} from "./lib/stringifyCircular.ts";
 
 function forwardConsole(
   fnName: 'log' | 'debug' | 'info' | 'warn' | 'error',
@@ -29,8 +27,6 @@ window.addEventListener("error", (e) => {
 window.addEventListener("unhandledrejection", (e) => {
   console.error(e.type, e.reason)
 })
-
-// attachConsole().then(() => console.log("Attached main process console"));
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

@@ -8,6 +8,7 @@ import {ffmpegExport, GpuAcceleration} from "../generated";
 import {gainToGainValue} from "../lib/useVideoGain.ts";
 import {convertFileSrc} from "@tauri-apps/api/core";
 import convertFilePath from "../lib/convertFilePath.ts";
+import AppStateStore from "./AppStateStore.ts";
 
 export interface AudioStream {
   streamIndex: number;
@@ -30,6 +31,8 @@ export interface VideoState {
 const MINIMAL_SECONDS_DIFF = 1
 
 class VideoEditorStore {
+  appStateStore: AppStateStore;
+
   path: string
   audioStreams: AudioStream[]
   duration: number | null
@@ -53,7 +56,7 @@ class VideoEditorStore {
   videoPlayerError: ErrorEvent | null = null
 
   getVideoPath() {
-    return convertFilePath(this.path);
+    return convertFilePath(this.path, this.appStateStore.integratedServerStatus?.port);
   }
 
   setVideoDuration(duration: number) {
@@ -241,8 +244,10 @@ class VideoEditorStore {
     })
   }
 
-  constructor(path: string, videoAudioStreamsInfo: VideoAudioStreamsInfo = {audioStreams: [], duration: 0}) {
+  constructor(appStateStore: AppStateStore, path: string, videoAudioStreamsInfo: VideoAudioStreamsInfo = {audioStreams: [], duration: 0}) {
     makeAutoObservable(this, {}, {autoBind: true})
+
+    this.appStateStore = appStateStore;
 
     this.path = path;
     this.audioStreams = videoAudioStreamsInfo.audioStreams.map(x => ({
