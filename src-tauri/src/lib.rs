@@ -6,6 +6,7 @@ mod ffprobe;
 mod handle_main_window_event;
 mod integrated_server;
 mod logs_store;
+mod open_devtools_command;
 mod select_new_video_file_command;
 mod temp_cleanup;
 
@@ -14,6 +15,7 @@ use crate::ffmpeg_export_command::ffmpeg_export;
 use crate::handle_main_window_event::handle_main_window_event;
 use crate::integrated_server::{IntegratedServerState, get_integrated_server_state, start_integrated_server};
 use crate::logs_store::{LogsStore, get_logs, get_logs_store_target};
+use crate::open_devtools_command::open_devtools;
 use crate::select_new_video_file_command::select_new_video_file;
 use crate::temp_cleanup::cleanup_temp;
 use std::ops::Deref;
@@ -68,7 +70,8 @@ pub fn run() {
             select_new_video_file,
             ffmpeg_export,
             get_integrated_server_state,
-            get_logs
+            get_logs,
+            open_devtools
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -4,6 +4,7 @@ import {LogsStoreContext} from "../stores/LogsStore.ts";
 import {Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,} from "@mui/material";
 import {LazyLog, ScrollFollow} from "@melloware/react-logviewer";
 import c from "ansi-colors";
+import {openDevtools} from "../generated/commands.ts";
 
 c.enabled = true;
 
@@ -67,6 +68,7 @@ const LogsView = observer(() => {
         </Box>
       </DialogContent>
       <DialogActions>
+        <Button onClick={openDevtools}>Open devtools</Button>
         <Button onClick={handleClose}>Close</Button>
       </DialogActions>
     </Dialog>

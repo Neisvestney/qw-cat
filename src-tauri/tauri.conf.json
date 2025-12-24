@@ -32,10 +32,23 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "targets": ["nsis"],
+    "category": "Video",
+    "targets": ["nsis", "deb", "rpm", "appimage"],
     "windows": {
       "nsis": {
         "installMode": "currentUser"
+      }
+    },
+    "linux": {
+      "deb": {
+        "recommends": ["ffmpeg"],
+        "section": "video"
+      },
+      "rpm": {
+        "recommends": ["ffmpeg"]
+      },
+      "appimage": {
+        "bundleMediaFramework": true
       }
     }
   },
@@ -53,6 +66,5 @@
       "visualizeDeps": false
     }
   },
-  "productName": "Qw Cat",
-  "version": "0.1.0"
+  "productName": "Qw Cat"
 }

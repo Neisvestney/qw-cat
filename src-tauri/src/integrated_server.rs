@@ -57,6 +57,7 @@ pub async fn start_integrated_server(app_handle: AppHandle, state: IntegratedSer
         .allow_origin([
             "http://localhost:1420".parse::<HeaderValue>().unwrap(),
             "http://tauri.localhost".parse::<HeaderValue>().unwrap(),
+            "tauri://localhost".parse::<HeaderValue>().unwrap(),
         ])
         .allow_methods(Any)
         .allow_headers(Any);
