@@ -9,7 +9,7 @@ use base64::prelude::BASE64_STANDARD;
 use ffmpeg_sidecar::command::{FfmpegCommand, ffmpeg_is_installed};
 use ffmpeg_sidecar::event::{FfmpegEvent, FfmpegProgress, LogLevel};
 use ffmpeg_sidecar::paths::ffmpeg_path;
-use log::{debug, error, info, log, trace};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -200,19 +200,17 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                     let info = get_video_audio_streams_info(&video_file_path);
                     if let Some(info) = info {
                         struct AudioStreamMap<'a> {
-                            format: &'a str,
                             index: i32,
                             path: String,
-                            codec_name: &'a str,
                             ffmpeg_map: &'a str,
-                        };
+                        }
 
                         let audio_streams: Vec<_> = info
                             .audio_streams
                             .iter()
                             .skip(1)
                             .map(|steam| {
-                                let (format, codec_name, ffmpeg_map) =
+                                let (format, _codec_name, ffmpeg_map) =
                                     if let Some(index) = WEB_SUPPORTED_AUDIO_CODECS.iter().position(|c| c == &steam.codec_name) {
                                         (
                                             WEB_SUPPORTED_AUDIO_CODECS_CONTAINERS.get(index).unwrap(),
@@ -224,10 +222,8 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                                     };
 
                                 AudioStreamMap {
-                                    format,
                                     index: steam.index,
                                     path: get_audio_file_path(&video_file_path, steam.index, format),
-                                    codec_name,
                                     ffmpeg_map,
                                 }
                             })
@@ -265,7 +261,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, e) => {
                                 error!("Ffmpeg: {e}")
                             }
-                            FfmpegEvent::Log(log_level, s) => {
+                            FfmpegEvent::Log(_log_level, s) => {
                                 info!("Ffmpeg: {s}")
                             }
                             FfmpegEvent::Progress(p) => {
@@ -289,12 +285,12 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                 .flatten();
 
                 let mut ffmpeg_task = ffmpeg_task.write().await;
-                if ffmpeg_result.is_some() {
+                if let Some(ffmpeg_result) = ffmpeg_result.clone() {
                     ffmpeg_task.status = FfmpegTaskStatus::Finished;
                     if let FfmpegTaskType::ExtractAudio { on_complete, result, .. } = &mut ffmpeg_task.task_type {
-                        *result = ffmpeg_result.clone();
+                        *result = Some(ffmpeg_result.clone());
                         if let Some(sender) = on_complete.take() {
-                            sender.send(ffmpeg_result.unwrap()).unwrap();
+                            sender.send(ffmpeg_result).unwrap();
                         }
                     }
                 } else {
@@ -409,7 +405,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, e) => {
                                 error!("Ffmpeg: {e}")
                             }
-                            FfmpegEvent::Log(log_level, s) => {
+                            FfmpegEvent::Log(_log_level, s) => {
                                 info!("Ffmpeg: {s}")
                             }
                             FfmpegEvent::Progress(p) => {

@@ -26,7 +26,7 @@ pub struct StreamInfo {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct FfprobeFormat {
+pub struct FfprobeFormat {
     pub duration: String,
 }
 

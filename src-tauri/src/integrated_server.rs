@@ -1,8 +1,6 @@
-use crate::ffmpeg::{FfmpegTaskStatus, FfmpegTaskType, FfmpegTasksQueue};
 use axum::Router;
 use axum::body::Body;
-use axum::http::header::{ACCEPT_RANGES, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE};
-use axum::http::{HeaderValue, Method, Request};
+use axum::http::{HeaderValue, Request};
 use axum::routing::get;
 use axum::{
     extract::{Path, State},
@@ -11,7 +9,7 @@ use axum::{
 };
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;

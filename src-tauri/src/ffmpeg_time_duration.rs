@@ -77,6 +77,7 @@ impl FfmpegTimeDuration {
     }
 
     #[must_use]
+    #[allow(clippy::manual_strip)]
     pub fn from_str(str: &str) -> Option<Self> {
         let str = str.trim();
 
@@ -138,6 +139,7 @@ impl FfmpegTimeDuration {
     }
 
     /// Returns a string representation of the duration in microseconds with "us" suffix.
+    #[allow(clippy::wrong_self_convention)]
     #[must_use]
     #[inline]
     pub fn to_alt_string(&self) -> String {

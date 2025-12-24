@@ -1,7 +1,7 @@
 use crate::APP_HANDLE;
 use log::Record;
-use ringbuf::traits::{Consumer, RingBuffer};
 use ringbuf::HeapRb;
+use ringbuf::traits::{Consumer, RingBuffer};
 use serde::Serialize;
 use serde_repr::Serialize_repr;
 use std::sync::RwLock;
