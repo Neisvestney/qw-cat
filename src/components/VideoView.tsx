@@ -26,7 +26,7 @@ import {
   Stack,
   styled,
   TextField,
-  Tooltip,
+  Tooltip, Typography,
 } from "@mui/material";
 import {css} from '@emotion/react';
 import {convertFileSrc} from "@tauri-apps/api/core";
@@ -47,9 +47,11 @@ import {GpuAcceleration} from "../generated";
 import ReplayIcon from "@mui/icons-material/Replay";
 import VolumeDown from "@mui/icons-material/VolumeDown";
 import VolumeUp from "@mui/icons-material/VolumeUp";
+import CancelIcon from '@mui/icons-material/Cancel';
 import {AudioStream} from "../stores/VideoEditorStore.ts";
 import {useThrottledCallback} from "use-debounce";
 import {gainToGainValue, useVideoGain} from "../lib/useVideoGain.ts";
+import convertFilePath from "../lib/convertFilePath.ts";
 
 const ViewContainer = styled('div')(
   ({theme}) => css`
@@ -98,11 +100,12 @@ const Video = styled('video')(
 
 interface VideoOverlayControlsWrapperProps {
   align?: CSSProperties["alignItems"];
+  fullscreen?: boolean;
 }
 
 const VideoOverlayControlsWrapper = styled('div')<VideoOverlayControlsWrapperProps>(
-  ({theme, align}) => css`
-      z-index: 2147483647;
+  ({theme, align, fullscreen = true}) => css`
+      z-index: ${fullscreen ? 2147483647 : 1};
       position: absolute;
       top: 0;
       bottom: 0;
@@ -228,7 +231,7 @@ const VideoView = observer(() => {
       const a = appStateStore.currentVideo.audioStreams
         .filter(x => x.streamIndex != appStateStore.currentVideo!.defaultAudioStreamIndex)
         .filter(x => x.path)
-        .map(x => convertFileSrc(x.path!));
+        .map(x => convertFilePath(x.path!));
 
       setAudioUrls(a)
     })
@@ -284,11 +287,17 @@ const VideoView = observer(() => {
       if (appStateStore.currentVideo) appStateStore.currentVideo.handleVideoStateChange("fullscreen", !!document.fullscreenElement)
     }
 
+    const handleVideoError = (e: ErrorEvent) => {
+      console.error("Video error:", e)
+      if (appStateStore.currentVideo) appStateStore.currentVideo.handleVideoPlayerError(e)
+    }
+
     videoElementRef.current?.addEventListener("timeupdate", handleTimeUpdate)
     videoElementRef.current?.addEventListener("play", handleVideoPlay)
     videoElementRef.current?.addEventListener("playing", handleVideoPlay)
     videoElementRef.current?.addEventListener("pause", handleVideoPause)
     videoElementRef.current?.addEventListener("waiting", handleWaiting)
+    videoElementRef.current?.addEventListener("error", handleVideoError)
     document.addEventListener("fullscreenchange", handleFullscreen)
 
     const dispose = autorun(() => {
@@ -318,6 +327,7 @@ const VideoView = observer(() => {
       videoElementRef.current?.removeEventListener("pause", handleVideoPause)
       videoElementRef.current?.removeEventListener("pause", handleVideoPause)
       videoElementRef.current?.removeEventListener("waiting", handleWaiting)
+      videoElementRef.current?.removeEventListener("error", handleVideoError)
       document.removeEventListener("fullscreenchange", handleFullscreen)
     }
   }, []);
@@ -432,11 +442,25 @@ const VideoView = observer(() => {
           controlsList="nodownload noplaybackrate noremoteplayback novolume"
           controls={false}
           onLoadedMetadata={onLoadedMetadata}
-          src={convertFileSrc(appStateStore.currentVideo.path)}
+          src={appStateStore.currentVideo.getVideoPath()}
           onClick={handleVideoClicked}
           onDoubleClick={handleVideoDoubleClicked}
         />
-        <VideoOverlayControlsWrapper align={"center"}>
+        {appStateStore.currentVideo.videoPlayerError &&
+            <VideoOverlayControlsWrapper align={"center"} fullscreen={appStateStore.currentVideo.videoState.fullscreen}>
+                <Stack direction={"row"} spacing={1} alignItems={"center"}>
+                    <CancelIcon sx={{fontSize: 50}}/>
+                    <Stack>
+                        <Typography variant={"h5"}>Video playback error</Typography>
+                        <Typography variant={"subtitle1"}>
+                            Probably video codec unsupported
+                            - You can still trim the video if ffmpeg supports video codec
+                        </Typography>
+                    </Stack>
+                </Stack>
+          </VideoOverlayControlsWrapper>
+        }
+        <VideoOverlayControlsWrapper align={"center"} fullscreen={appStateStore.currentVideo.videoState.fullscreen}>
           <VideoPlayPauseBlinker/>
         </VideoOverlayControlsWrapper>
         <VideoOverlayControlsWrapper>
@@ -477,9 +501,8 @@ const VideoView = observer(() => {
           const defaultAudio = audioStream.streamIndex == appStateStore.currentVideo!.defaultAudioStreamIndex
           const audioStreamEnabled = audioStream.active
 
-          return <Stack spacing={1} direction="row" sx={{alignItems: "center"}}>
+          return <Stack spacing={1} direction="row" sx={{alignItems: "center"}} key={audioStream.streamIndex}>
             <FormControlLabel
-              key={audioStream.streamIndex}
               control={<Checkbox
                 checked={audioStreamEnabled}
                 onChange={() => appStateStore.currentVideo!.toggleAudioStream(audioStream.streamIndex)}
@@ -619,8 +642,27 @@ const VideoView = observer(() => {
   </ViewContainer>
 })
 
-const formatTime = (value: number) => {
-  return format(value * 1000, {})
+const formatTime = (startTime: number, endTime: number) => {
+  const formatWithHours = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatWithoutHours = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const hasHours = endTime >= 3600;
+
+  if (hasHours) {
+    return `${formatWithHours(startTime)} / ${formatWithHours(endTime)}`;
+  } else {
+    return `${formatWithoutHours(startTime)} / ${formatWithoutHours(endTime)}`;
+  }
 }
 
 const TimelineWithControls = observer(() => {
@@ -640,7 +682,7 @@ const TimelineWithControls = observer(() => {
     </Box>
     <Timeline/>
     <Box sx={{marginBottom: "8px", marginLeft: 1.3}}>
-      {formatTime(appStateStore.currentVideo.videoState.time ?? 0)} / {formatTime(appStateStore.currentVideo.duration ?? 0)}
+      {formatTime(appStateStore.currentVideo.videoState.time ?? 0, appStateStore.currentVideo.duration ?? 0)}
     </Box>
     <Box sx={{marginBottom: "2px"}}>
       <IconButton onClick={appStateStore.currentVideo?.toggleVideoFullscreen}>

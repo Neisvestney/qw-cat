@@ -6,7 +6,7 @@
         "enable": true,
         "scope": ["$TEMP/**"]
       },
-      "csp": null
+      "csp": "default-src 'none' tauri://localhost; script-src 'self' tauri://localhost; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data:; font-src 'self' asset:; media-src 'self' http://127.0.0.1:38125; connect-src 'self' tauri://localhost http://127.0.0.1:38125; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';"
     },
     "windows": [
       {

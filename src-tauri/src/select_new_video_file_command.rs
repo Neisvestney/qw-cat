@@ -7,6 +7,7 @@ use tauri::ipc::Channel;
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use tokio::sync::oneshot;
 use ts_rs::TS;
+use crate::integrated_server::IntegratedServerState;
 
 #[derive(Deserialize, Serialize, TS)]
 pub struct SelectedVideoFile {
@@ -20,6 +21,7 @@ pub struct AudioStreamFilePath {
     pub path: String,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "event")]
 #[ts(export)]
@@ -36,6 +38,7 @@ pub async fn select_new_video_file(app_handle: tauri::AppHandle, on_event: Chann
 
     if let Some(path) = file_path {
         app_handle.asset_protocol_scope().allow_file(path.as_path().unwrap()).unwrap();
+        app_handle.state::<IntegratedServerState>().allow_file(path.to_string()).await;
 
         let path = path.to_string();
         let audio_steams = ffprobe::get_video_audio_streams_info(&path).unwrap_or(VideoAudioStreamsInfo::empty());

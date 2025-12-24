@@ -19,7 +19,7 @@ const StartPage = observer(() => {
       gridRow: 1,
       gridColumn: 1,
     }}>
-      <Typography color={"#171717"} fontSize={200} lineHeight={0.8} component="span" noWrap>QW CAT</Typography>
+      <Typography color={"#171717"} fontSize={200} lineHeight={0.8} component="span" noWrap sx={{userSelect: "none"}}>QW CAT</Typography>
     </Box>
     <Box component="section" sx={{
       display: "flex",
@@ -50,6 +50,7 @@ const StartPage = observer(() => {
           </CardContent>
           <CardActions sx={{justifyContent: "end"}}>
             <Button
+              component={"span"}
               size="small"
               endIcon={<FolderIcon/>}
               loading={store.fileProcessingInfo}

@@ -6,6 +6,8 @@ import replaceExtension from "../lib/replaceExtension.ts";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
 import {ffmpegExport, GpuAcceleration} from "../generated";
 import {gainToGainValue} from "../lib/useVideoGain.ts";
+import {convertFileSrc} from "@tauri-apps/api/core";
+import convertFilePath from "../lib/convertFilePath.ts";
 
 export interface AudioStream {
   streamIndex: number;
@@ -46,6 +48,12 @@ class VideoEditorStore {
     playing: null,
     loading: null,
     fullscreen: null,
+  }
+
+  videoPlayerError: ErrorEvent | null = null
+
+  getVideoPath() {
+    return convertFilePath(this.path);
   }
 
   setVideoDuration(duration: number) {
@@ -107,6 +115,10 @@ class VideoEditorStore {
     if (index != -1) {
       this.audioStreams[index].gain = gain;
     }
+  }
+
+  handleVideoPlayerError(error: ErrorEvent) {
+    this.videoPlayerError = error;
   }
 
   handleVideoStateChange<K extends keyof VideoState>(key: K, value: VideoState[K]) {
@@ -243,6 +255,7 @@ class VideoEditorStore {
     this.trimStart = null;
     this.trimEnd = null;
 
+    this.setVideoDuration(videoAudioStreamsInfo.duration);
     this.setExportPath(addPostfixToFilename(path, " - Trim"))
   }
 }
