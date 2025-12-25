@@ -36,7 +36,8 @@
     "targets": ["nsis", "deb", "rpm", "appimage"],
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerIcon": "./icons/icon.ico"
       }
     },
     "linux": {
