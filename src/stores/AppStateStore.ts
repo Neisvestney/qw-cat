@@ -7,6 +7,7 @@ import {SelectNewVideoFileEvent} from "../generated/bindings/SelectNewVideoFileE
 import FfmpegTasksQueue from "./FfmpegTasksQueue.ts";
 import {IntegratedServerStarted} from "../generated/bindings/IntegratedServerStarted.ts";
 import {listen} from "@tauri-apps/api/event";
+import {AsyncEventsDisposer, createAsyncEventsDisposer} from "../lib/createAsyncEventsDisposer.ts";
 
 class AppStateStore {
   currentVideo: VideoEditorStore | null = null
@@ -14,9 +15,10 @@ class AppStateStore {
 
   filePickingInProgress = false
   fileProcessingInfo = false
-  currentSelectNewVideoFileEventChannel: Channel<SelectNewVideoFileEvent> | null = null
 
   integratedServerStatus: IntegratedServerStarted | null = null
+
+  private disposer: AsyncEventsDisposer | null = null
 
   get selectNewVideoFileDisabled() {
     return this.filePickingInProgress || this.fileProcessingInfo
@@ -24,43 +26,54 @@ class AppStateStore {
 
   async selectNewVideoFile() {
     if (this.selectNewVideoFileDisabled) return;
-    if (this.currentSelectNewVideoFileEventChannel != null) this.currentSelectNewVideoFileEventChannel.onmessage = () => {}
 
     this.filePickingInProgress = true
-    this.fileProcessingInfo = false
-    const onEvent = new Channel<SelectNewVideoFileEvent>();
-    onEvent.onmessage = (message) => {
-      runInAction(() => {
-        switch (message.event) {
-          case "videoFilePicked":
-            this.fileProcessingInfo = true
-            break;
-          case "videoFileInfoReady":
-            if (message.videoFile != null) {
-              this.currentVideo = new VideoEditorStore(this, message.videoFile.path, message.videoFile.audio_steams)
-            } else {
-
-            }
-            this.filePickingInProgress = false
-            this.fileProcessingInfo = false
-            break;
-          case "videoAudioSteamsReady":
-            this.currentVideo?.updateAudioStreamsFilePaths(message.audioStreams)
-            break;
-        }
-      })
-    };
-
-    this.currentSelectNewVideoFileEventChannel = onEvent;
-    await selectNewVideoFile({onEvent: onEvent as Channel<any>})
+    await selectNewVideoFile()
   }
 
   closeCurrentVideo() {
     this.currentVideo = null;
   }
 
-  async subscribeToIntegratedServerEvents() {
-    await listen<IntegratedServerStarted>("integrated-server-started", (e) => {
+  async init() {
+    let disposer = createAsyncEventsDisposer()
+    this.disposer = disposer;
+    await this.subscribeToIntegratedServerEvents(disposer)
+    await this.subscribeToVideoSelectionEvent(disposer)
+    await this.ffmpegTasksQueue.listenToFfmpegEvents(disposer)
+  }
+
+  dispose() {
+    this.disposer?.dispose()
+  }
+
+  async subscribeToVideoSelectionEvent(disposer: AsyncEventsDisposer) {
+    await disposer.addListener<SelectNewVideoFileEvent>("select-new-video-file-event", (e) => {
+      runInAction(() => {
+        // console.log("select-new-video-file-event", e.payload)
+        switch (e.payload.event) {
+          case "videoFilePicked":
+            this.filePickingInProgress = false
+            this.fileProcessingInfo = true
+            break;
+          case "videoFileInfoReady":
+            if (e.payload.videoFile != null) {
+              this.currentVideo = new VideoEditorStore(this, e.payload.videoFile.path, e.payload.videoFile.audio_steams)
+            }
+            this.fileProcessingInfo = false
+            break;
+          case "videoAudioSteamsReady":
+            if (!this.currentVideo) return;
+            if (this.currentVideo.path != e.payload.videoFile) return;
+            this.currentVideo.updateAudioStreamsFilePaths(e.payload.audioStreams)
+            break;
+        }
+      })
+    })
+  }
+
+  async subscribeToIntegratedServerEvents(disposer: AsyncEventsDisposer) {
+    await disposer.addListener<IntegratedServerStarted>("integrated-server-started", (e) => {
       runInAction(() => {
         this.integratedServerStatus = e.payload
       })
@@ -71,8 +84,6 @@ class AppStateStore {
 
   constructor() {
     makeAutoObservable(this, {}, {autoBind: true})
-
-    this.subscribeToIntegratedServerEvents()
   }
 }
 

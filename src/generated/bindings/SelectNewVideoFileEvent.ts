@@ -2,4 +2,4 @@
 import type { AudioStreamFilePath } from "./AudioStreamFilePath";
 import type { SelectedVideoFile } from "./SelectedVideoFile";
 
-export type SelectNewVideoFileEvent = { "event": "videoFilePicked" } | { "event": "videoFileInfoReady", videoFile: SelectedVideoFile | null, } | { "event": "videoAudioSteamsReady", audioStreams: Array<AudioStreamFilePath>, };
+export type SelectNewVideoFileEvent = { "event": "videoFilePicked" } | { "event": "videoFileInfoReady", videoFile: SelectedVideoFile | null, } | { "event": "videoAudioSteamsReady", videoFile: string, audioStreams: Array<AudioStreamFilePath>, };

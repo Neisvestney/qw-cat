@@ -252,8 +252,6 @@ const VideoView = observer(() => {
     };
   }, []);
 
-  console.log(appStateStore)
-
   useSyncedMediaTracks(audioUrls, appStateStore.currentVideo?.audioStreams.length ?? 0, audioGains, videoElementRef)
 
   const audioCtx = useVideoGain(videoElementRef, appStateStore.currentVideo?.defaultAudioStream)
@@ -335,6 +333,8 @@ const VideoView = observer(() => {
   }, []);
 
   useEffect(() => {
+    if (exportModalOpen) return;
+
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.altKey || e.ctrlKey || e.shiftKey || e.metaKey) return;
 
@@ -373,7 +373,7 @@ const VideoView = observer(() => {
     window.addEventListener("keydown", handleKeyPress)
 
     return () => window.removeEventListener("keydown", handleKeyPress)
-  }, []);
+  }, [exportModalOpen]);
 
   if (!appStateStore.currentVideo) return;
 

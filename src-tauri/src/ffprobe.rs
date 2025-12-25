@@ -18,7 +18,7 @@ impl BackgroundCommand for Command {
     }
 }
 
-#[derive(Serialize, Deserialize, TS)]
+#[derive(Clone, Serialize, Deserialize, TS)]
 pub struct StreamInfo {
     pub index: i32,
     pub codec_name: String,
@@ -37,7 +37,7 @@ pub struct FfprobeOutput {
     pub format: FfprobeFormat,
 }
 
-#[derive(Serialize, Deserialize, TS)]
+#[derive(Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct VideoAudioStreamsInfo {
     pub audio_streams: Vec<StreamInfo>,

@@ -25,6 +25,16 @@ const App = observer(() => {
     })
   }, []);
 
+  useEffect(() => {
+    appStateStore.init()
+    return () => appStateStore.dispose()
+  }, []);
+
+  useEffect(() => {
+    logsStore.init()
+    return () => logsStore.dispose()
+  }, []);
+
   return (
     <LogsStoreContext.Provider value={logsStore}>
       <AppStateStoreContext.Provider value={appStateStore}>

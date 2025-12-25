@@ -3,6 +3,7 @@ import {makeAutoObservable, runInAction} from "mobx";
 import {attachLogger, LogLevel} from "@tauri-apps/plugin-log";
 import c from "ansi-colors";
 import {getLogs} from "../generated";
+import {AsyncEventsDisposer, createAsyncEventsDisposer} from "../lib/createAsyncEventsDisposer.ts";
 
 const logLevelsColors = {
   [LogLevel.Trace]: c.grey,
@@ -24,14 +25,25 @@ export interface LogRecord {
 class LogsStore {
   logs: LogRecord[] = []
 
+  private disposer: AsyncEventsDisposer | null = null;
+
   constructor() {
     makeAutoObservable(this, {}, {autoBind: true})
-
-    attachLogger(this.addLogEntry).then(() => {})
-    this.fetchLogs()
   }
 
-  addLogEntry(entry: LogRecord) {
+  async init() {
+    let disposer = createAsyncEventsDisposer()
+    this.disposer = disposer;
+    await disposer.add(() => attachLogger((e) => this.addLogEntry(e, disposer)))
+    await this.fetchLogs()
+  }
+
+  dispose() {
+    this.disposer?.dispose()
+  }
+
+  addLogEntry(entry: LogRecord, disposer: AsyncEventsDisposer) {
+    if (disposer.isDisposed) return;
     this.logs.push(entry)
   }
 

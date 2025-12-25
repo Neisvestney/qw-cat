@@ -1,13 +1,13 @@
 import {makeAutoObservable, runInAction} from "mobx";
 import {listen} from "@tauri-apps/api/event";
 import {FfmpegTask} from "../generated/bindings/FfmpegTask.ts";
+import {AsyncEventsDisposer} from "../lib/createAsyncEventsDisposer.ts";
 
 class FfmpegTasksQueue {
   ffmpegTasks: FfmpegTask[] = []
 
   constructor() {
     makeAutoObservable(this, {}, {autoBind: true})
-    const _ = this.listenToFfmpegEvents()
   }
 
   get lastInProgressOrLastTaskFromQueue() {
@@ -16,8 +16,8 @@ class FfmpegTasksQueue {
     return lastInProgressTask ?? this.ffmpegTasks[this.ffmpegTasks.length - 1]
   }
 
-  async listenToFfmpegEvents() {
-    await listen<FfmpegTask[]>("ffmpeg-queue", (message) => {
+  async listenToFfmpegEvents(disposer: AsyncEventsDisposer) {
+    await disposer.addListener<FfmpegTask[]>("ffmpeg-queue", (message) => {
       runInAction(() => {
         this.ffmpegTasks = message.payload;
       })
