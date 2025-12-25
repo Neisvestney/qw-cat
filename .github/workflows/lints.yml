@@ -10,9 +10,9 @@ on:
       - 'yarn.lock'
       - '.github/workflows/lints.yml'
       - 'tsconfig.json'
-      - `tsconfig.node.json`
-      - `vite.config.ts`
-      - `index.html`
+      - 'sconfig.node.json'
+      - 'ite.config.ts'
+      - 'ndex.html'
   pull_request:
     branches: [ "master" ]
     paths:
@@ -22,9 +22,9 @@ on:
       - 'yarn.lock'
       - '.github/workflows/lints.yml'
       - 'tsconfig.json'
-      - `tsconfig.node.json`
-      - `vite.config.ts`
-      - `index.html`
+      - 'sconfig.node.json'
+      - 'ite.config.ts'
+      - 'ndex.html'
 
 env:
   CARGO_TERM_COLOR: always
