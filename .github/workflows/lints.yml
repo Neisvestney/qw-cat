@@ -3,8 +3,28 @@ name: Checks
 on:
   push:
     branches: [ "master" ]
+    paths:
+      - 'src-tauri/**'
+      - 'src/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.github/workflows/lints.yml'
+      - 'tsconfig.json'
+      - `tsconfig.node.json`
+      - `vite.config.ts`
+      - `index.html`
   pull_request:
     branches: [ "master" ]
+    paths:
+      - 'src-tauri/**'
+      - 'src/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.github/workflows/lints.yml'
+      - 'tsconfig.json'
+      - `tsconfig.node.json`
+      - `vite.config.ts`
+      - `index.html`
 
 env:
   CARGO_TERM_COLOR: always
