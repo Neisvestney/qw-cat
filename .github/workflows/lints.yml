@@ -12,7 +12,7 @@ on:
       - 'tsconfig.json'
       - 'sconfig.node.json'
       - 'ite.config.ts'
-      - 'ndex.html'
+      - 'index.html'
   pull_request:
     branches: [ "master" ]
     paths:
@@ -24,7 +24,7 @@ on:
       - 'tsconfig.json'
       - 'sconfig.node.json'
       - 'ite.config.ts'
-      - 'ndex.html'
+      - 'index.html'
 
 env:
   CARGO_TERM_COLOR: always
@@ -41,10 +41,11 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Install system dependencies
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: 1.0
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
