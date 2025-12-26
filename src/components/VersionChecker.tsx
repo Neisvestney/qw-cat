@@ -25,7 +25,7 @@ const VersionChecker = observer(() => {
   return <>
     {latestVersion.isNewer &&
         <Link
-            sx={{marginBottom: 2}}
+            sx={{marginBottom: 3}}
             onClick={() => openUrl(`https://github.com/Neisvestney/qw-cat/releases/${latestVersion.tag}`)}
         >
             New version available: {__APP_VERSION__} {'->'} {latestVersion.tag}
