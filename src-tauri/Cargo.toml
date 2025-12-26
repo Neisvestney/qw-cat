@@ -4,7 +4,7 @@ version = "0.2.0"
 description = "View and trim video"
 authors = ["Neisvestney"]
 repository = "https://github.com/Neisvestney/qw-cat"
-homepage = "https://github.com/Neisvestney/qw-cat"
+homepage = "https://github.com/Neisvestney/qw-cat#readme"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

@@ -18,6 +18,7 @@ import FolderIcon from "@mui/icons-material/Folder"
 import ContentCutIcon from '@mui/icons-material/ContentCut';
 import TheatersIcon from '@mui/icons-material/Theaters';
 import CatIcon from 'mdi-material-ui/Cat'
+import VersionChecker from "./VersionChecker.tsx";
 
 const StartPage = observer(() => {
   const store = useContext(AppStateStoreContext)
@@ -72,6 +73,15 @@ const StartPage = observer(() => {
           </CardActions>
         </CardActionArea>
       </Card>
+    </Box>
+    <Box sx={{
+      gridRow: 1,
+      gridColumn: 1,
+      display: "flex",
+      justifyContent: "start",
+      alignItems: "end",
+    }}>
+      <VersionChecker/>
     </Box>
     <Backdrop
       sx={(theme) => ({ color: '#fff', zIndex: theme.zIndex.snackbar + 1 })}
