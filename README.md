@@ -8,11 +8,11 @@ Built with Tauri v2 and React, powered by FFmpeg.
 ## Features
 
 - Mixing multiple audio tracks into one with different volume
-- Running FFmpeg with nvidia hardware acceleration and using gpu encoders
+- Running FFmpeg with NVIDIA hardware acceleration and using gpu encoders
 - Automatic ffmpeg download
 - Easy-to-use interface with advanced ffmpeg command customization options
 
-**Note:** Currently only NVIDIA GPU hardware acceleration is supported. AMD and Intel GPU support is not yet
+**Note:** Currently, only NVIDIA GPU hardware acceleration is supported. AMD and Intel GPU support is not yet
 implemented.
 
 ## Installation
@@ -36,4 +36,4 @@ implemented.
 ## Contributing
 
 Pull requests are welcome.  
-Plesae format your code with `cargo fmt` and `cargo clippy` before submitting a PR
+Please format your code with `cargo fmt` and `cargo clippy` before submitting a PR
