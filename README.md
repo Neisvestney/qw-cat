@@ -1,8 +1,33 @@
-# Qw Cat
+<p align="center">
+    <img width="150" height="150" src="src/assets/qwcat_big.svg" alt="Logo">
+    <h1 align="center"><b>Qw Cat</b></h1>
+    <p  align="center">
+        Desktop application designed for quick video trimming and processing.
+    </p>
+    <p align="center">
+        <a href="https://github.com/Neisvestney/qw-cat/releases/latest">
+            <img alt="Windows download" src="https://img.shields.io/badge/download-windows_x64-blue?style=for-the-badge">
+        </a>
+        <a href="https://github.com/Neisvestney/qw-cat/releases/latest">
+            <img alt="Linux download" src="https://img.shields.io/badge/download-linux_x64_.deb-orange?style=for-the-badge&logo=debian">
+        </a>
+        <a href="https://github.com/Neisvestney/qw-cat/releases/latest">
+            <img alt="Linux download" src="https://img.shields.io/badge/download-linux_x64_.rpm-blue?style=for-the-badge&logo=fedora">
+        </a>
+        <a href="https://github.com/Neisvestney/qw-cat/releases/latest">
+            <img alt="Other download" src="https://img.shields.io/badge/download-other-lightslategray?style=for-the-badge">
+        </a>
+    </p>
+</p>
+<br/>
+
+
+## Overview
+
+[![GitHub Release](https://img.shields.io/github/v/release/Neisvestney/qw-cat?display_name=release&style=flat-square&label=Latest%20version)](https://github.com/Neisvestney/qw-cat/releases/latest)
 
 ![Screenshot](src/assets/app_demo.png)
 
-**Qw Cat** is a desktop application designed for quick video trimming and processing.  
 Built with Tauri v2 and React, powered by FFmpeg.
 
 ## Features
