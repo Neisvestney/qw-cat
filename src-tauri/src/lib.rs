@@ -3,6 +3,7 @@ mod ffmpeg_download;
 mod ffmpeg_export_command;
 mod ffmpeg_time_duration;
 mod ffprobe;
+mod handle_cli_args;
 mod handle_main_window_event;
 mod integrated_server;
 mod logs_store;
@@ -12,12 +13,14 @@ mod temp_cleanup;
 
 use crate::ffmpeg::{FfmpegTasksQueue, create_ffmpeg_tasks_queue, emit_ffmpeg_queue_status, enqueue_download_ffmpeg_task};
 use crate::ffmpeg_export_command::ffmpeg_export;
+use crate::handle_cli_args::handle_cli_args_on_frontend_initialized;
 use crate::handle_main_window_event::handle_main_window_event;
 use crate::integrated_server::{IntegratedServerState, get_integrated_server_state, start_integrated_server};
 use crate::logs_store::{LogsStore, get_logs, get_logs_store_target};
 use crate::open_devtools_command::open_devtools;
 use crate::select_new_video_file_command::select_new_video_file;
 use crate::temp_cleanup::cleanup_temp;
+use std::env;
 use std::ops::Deref;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Listener, Manager, async_runtime, generate_handler};
@@ -53,8 +56,11 @@ pub fn run() {
                 enqueue_download_ffmpeg_task(&queue).await;
             });
 
-            app.listen("frontend-initialized", |_event| {
+            let app_handle = app.handle().clone();
+            app.listen("frontend-initialized", move |_event| {
+                let app_handle = app_handle.clone();
                 async_runtime::spawn(emit_ffmpeg_queue_status());
+                async_runtime::spawn(handle_cli_args_on_frontend_initialized(app_handle));
             });
 
             let files_host_server_state = app.state::<IntegratedServerState>().deref().clone();
