@@ -2,7 +2,7 @@ name: Build app and upload to release
 
 on:
   release:
-    types: [ published ]
+    types: [ created ]
 
 jobs:
   build-tauri:
@@ -17,6 +17,8 @@ jobs:
 #          - platform: 'macos-latest' # for Intel based macs.
 #            args: '--target x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
+            args: ''
+          - platform: 'ubuntu-22.04-arm'
             args: ''
           - platform: 'windows-latest'
             args: ''
