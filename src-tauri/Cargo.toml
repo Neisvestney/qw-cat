@@ -1,7 +1,7 @@
 [package]
 name = "qw-cat"
-version = "0.1.0"
-description = "Quick video trimming"
+version = "0.2.0"
+description = "View and trim video"
 authors = ["Neisvestney"]
 repository = "https://github.com/Neisvestney/qw-cat"
 homepage = "https://github.com/Neisvestney/qw-cat"

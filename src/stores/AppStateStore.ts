@@ -6,7 +6,7 @@ import {Channel} from "@tauri-apps/api/core";
 import {SelectNewVideoFileEvent} from "../generated/bindings/SelectNewVideoFileEvent.ts";
 import FfmpegTasksQueue from "./FfmpegTasksQueue.ts";
 import {IntegratedServerStarted} from "../generated/bindings/IntegratedServerStarted.ts";
-import {listen} from "@tauri-apps/api/event";
+import {emit, listen} from "@tauri-apps/api/event";
 import {AsyncEventsDisposer, createAsyncEventsDisposer} from "../lib/createAsyncEventsDisposer.ts";
 
 class AppStateStore {
@@ -41,6 +41,9 @@ class AppStateStore {
     await this.subscribeToIntegratedServerEvents(disposer)
     await this.subscribeToVideoSelectionEvent(disposer)
     await this.ffmpegTasksQueue.listenToFfmpegEvents(disposer)
+    await emit("frontend-initialized").then(() => {
+      console.log("Frontend initialized")
+    })
   }
 
   dispose() {
@@ -50,7 +53,7 @@ class AppStateStore {
   async subscribeToVideoSelectionEvent(disposer: AsyncEventsDisposer) {
     await disposer.addListener<SelectNewVideoFileEvent>("select-new-video-file-event", (e) => {
       runInAction(() => {
-        // console.log("select-new-video-file-event", e.payload)
+        console.log("select-new-video-file-event", e.payload)
         switch (e.payload.event) {
           case "videoFilePicked":
             this.filePickingInProgress = false

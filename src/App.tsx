@@ -20,12 +20,6 @@ const App = observer(() => {
   const [logsStore] = useState(() => new LogsStore())
 
   useEffect(() => {
-    emit("frontend-initialized").then(() => {
-      console.log("Frontend initialized")
-    })
-  }, []);
-
-  useEffect(() => {
     appStateStore.init()
     return () => appStateStore.dispose()
   }, []);

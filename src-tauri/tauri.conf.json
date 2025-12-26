@@ -6,7 +6,7 @@
         "enable": true,
         "scope": ["$TEMP/**"]
       },
-      "csp": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data:; font-src 'self' asset:; media-src 'self' http://127.0.0.1:*; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:*; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';"
+      "csp": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: data:; font-src 'self' asset: data:; media-src 'self' http://127.0.0.1:*; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:*; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';"
     },
     "windows": [
       {
@@ -43,15 +43,23 @@
     "linux": {
       "deb": {
         "recommends": ["ffmpeg"],
-        "section": "video"
+        "section": "video",
+        "desktopTemplate": "./bundle/template.desktop"
       },
       "rpm": {
-        "recommends": ["ffmpeg"]
+        "recommends": ["ffmpeg"],
+        "desktopTemplate": "./bundle/template.desktop"
       },
       "appimage": {
         "bundleMediaFramework": true
       }
-    }
+    },
+    "fileAssociations": [
+      {
+        "ext": ["mp4", "m4v", "mov", "avi", "wmv", "flv", "f4v", "webm", "mkv", "mpg", "mpeg"],
+        "mimeType": "video/mp4;video/quicktime;video/x-msvideo;video/x-ms-wmv;video/x-flv;video/webm;video/x-matroska;video/mpeg;"
+      }
+    ]
   },
   "identifier": "com.qw-cat.app",
   "plugins": {
