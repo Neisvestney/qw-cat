@@ -1,55 +1,57 @@
 import {EventCallback, EventName, listen, Options, UnlistenFn} from "@tauri-apps/api/event";
 
-
 export function createAsyncEventsDisposer() {
-  let disposed = false
-  const disposers: UnlistenFn[] = []
+  let disposed = false;
+  const disposers: UnlistenFn[] = [];
 
   return {
     async add(factory: () => Promise<UnlistenFn>) {
-      if (disposed) return
+      if (disposed) return;
 
-      const unlisten = await factory()
+      const unlisten = await factory();
 
       if (disposed) {
-        unlisten()
-        return
+        unlisten();
+        return;
       }
 
-      disposers.push(unlisten)
+      disposers.push(unlisten);
     },
 
     async addListener<T>(event: EventName, handler: EventCallback<T>, options?: Options) {
-      if (disposed) return
+      if (disposed) return;
 
-      const unlisten = await listen<T>(event, (e) => {
-        if (this.isDisposed) return;
-        handler.call(this, e)
-      }, options)
+      const unlisten = await listen<T>(
+        event,
+        (e) => {
+          if (this.isDisposed) return;
+          handler.call(this, e);
+        },
+        options,
+      );
 
       if (disposed) {
-        unlisten()
-        return
+        unlisten();
+        return;
       }
 
-      disposers.push(unlisten)
+      disposers.push(unlisten);
     },
 
     dispose() {
-      if (disposed) return
-      disposed = true
+      if (disposed) return;
+      disposed = true;
 
       for (const d of disposers) {
-        d()
+        d();
       }
-      disposers.length = 0
+      disposers.length = 0;
     },
 
     get isDisposed() {
-      return disposed
-    }
-  }
+      return disposed;
+    },
+  };
 }
 
-
-export type AsyncEventsDisposer = ReturnType<typeof createAsyncEventsDisposer>
+export type AsyncEventsDisposer = ReturnType<typeof createAsyncEventsDisposer>;

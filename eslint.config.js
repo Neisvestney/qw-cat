@@ -8,7 +8,7 @@ import pluginMobx from "eslint-plugin-mobx";
 import react from "eslint-plugin-react";
 
 export default tseslint.config(
-  { ignores: ["dist", "src-tauri", "src/generated"] },
+  {ignores: ["dist", "src-tauri", "src/generated"]},
   {
     extends: [
       js.configs.recommended,
@@ -24,7 +24,7 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
-    settings: { react: { version: "18.3" } },
+    settings: {react: {version: "18.3"}},
     plugins: {
       "react-hooks": reactHooks,
       "react-refresh": reactRefresh,
@@ -33,7 +33,7 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+      "react-refresh/only-export-components": ["warn", {allowConstantExport: true}],
       ...react.configs.recommended.rules,
       ...react.configs["jsx-runtime"].rules,
 
@@ -42,7 +42,18 @@ export default tseslint.config(
       "mobx/missing-make-observable": "error",
       "mobx/missing-observer": "warn",
 
-      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          args: "none",
+          argsIgnorePattern: "^_",
+          caughtErrors: "all",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+        },
+      ],
       "@typescript-eslint/require-await": "off",
       "@typescript-eslint/no-floating-promises": "off",
       "@typescript-eslint/no-unsafe-argument": "off",

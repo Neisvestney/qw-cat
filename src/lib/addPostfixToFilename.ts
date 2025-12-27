@@ -1,9 +1,9 @@
 function addPostfixToFilename(path: string, postfix: string) {
-  const lastSlashIndex = path.lastIndexOf('/');
-  const dir = lastSlashIndex !== -1 ? path.slice(0, lastSlashIndex + 1) : '';
+  const lastSlashIndex = path.lastIndexOf("/");
+  const dir = lastSlashIndex !== -1 ? path.slice(0, lastSlashIndex + 1) : "";
   const filename = lastSlashIndex !== -1 ? path.slice(lastSlashIndex + 1) : path;
 
-  const lastDotIndex = filename.lastIndexOf('.');
+  const lastDotIndex = filename.lastIndexOf(".");
   if (lastDotIndex === -1) {
     // No extension
     return dir + filename + postfix;

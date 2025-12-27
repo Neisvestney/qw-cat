@@ -6,7 +6,6 @@ import replaceExtension from "../lib/replaceExtension.ts";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
 import {ffmpegExport, GpuAcceleration} from "../generated";
 import {gainToGainValue} from "../lib/useVideoGain.ts";
-import {convertFileSrc} from "@tauri-apps/api/core";
 import convertFilePath from "../lib/convertFilePath.ts";
 import AppStateStore from "./AppStateStore.ts";
 
@@ -28,32 +27,32 @@ export interface VideoState {
   fullscreen: boolean;
 }
 
-const MINIMAL_SECONDS_DIFF = 1
+const MINIMAL_SECONDS_DIFF = 1;
 
 class VideoEditorStore {
   appStateStore: AppStateStore;
 
-  path: string
-  audioStreams: AudioStream[]
-  duration: number | null
-  trimStart: number | null
-  trimEnd: number | null
+  path: string;
+  audioStreams: AudioStream[];
+  duration: number | null;
+  trimStart: number | null;
+  trimEnd: number | null;
 
   videoState: VideoState = {
     time: 0,
     playing: false,
     loading: false,
     fullscreen: false,
-  }
+  };
 
   videoTargetState: Nullable<VideoState> = {
     time: null,
     playing: null,
     loading: null,
     fullscreen: null,
-  }
+  };
 
-  videoPlayerError: ErrorEvent | null = null
+  videoPlayerError: ErrorEvent | null = null;
 
   getVideoPath() {
     return convertFilePath(this.path, this.appStateStore.integratedServerStatus?.port);
@@ -71,13 +70,13 @@ class VideoEditorStore {
 
     if (trimEnd - trimStart < MINIMAL_SECONDS_DIFF) return;
 
-    this.trimStart = trimStart >= 0 ? trimStart : 0
-    this.trimEnd = trimEnd <= this.duration ? trimEnd : this.duration
+    this.trimStart = trimStart >= 0 ? trimStart : 0;
+    this.trimEnd = trimEnd <= this.duration ? trimEnd : this.duration;
   }
 
   get startHereDisabled() {
     if (this.trimEnd == null || this.videoState.time == null) return true;
-    return this.trimEnd - MINIMAL_SECONDS_DIFF < this.videoState.time
+    return this.trimEnd - MINIMAL_SECONDS_DIFF < this.videoState.time;
   }
 
   handleStartHere() {
@@ -87,7 +86,7 @@ class VideoEditorStore {
 
   get endHereDisabled() {
     if (this.trimStart == null || this.videoState.time == null) return true;
-    return this.trimStart + MINIMAL_SECONDS_DIFF > this.videoState.time
+    return this.trimStart + MINIMAL_SECONDS_DIFF > this.videoState.time;
   }
 
   handleEndHere() {
@@ -101,20 +100,20 @@ class VideoEditorStore {
 
   updateAudioStreamsFilePaths(audioStreamsFilePaths: AudioStreamFilePath[]) {
     for (const audioStreamsFilePath of audioStreamsFilePaths) {
-      const index = this.audioStreams.findIndex(x => x.streamIndex == audioStreamsFilePath.index);
+      const index = this.audioStreams.findIndex((x) => x.streamIndex == audioStreamsFilePath.index);
       if (index != -1) this.audioStreams[index].path = audioStreamsFilePath.path;
     }
   }
 
   toggleAudioStream(streamIndex: number) {
-    const index = this.audioStreams.findIndex(x => x.streamIndex == streamIndex)
+    const index = this.audioStreams.findIndex((x) => x.streamIndex == streamIndex);
     if (index != -1) {
       this.audioStreams[index].active = !this.audioStreams[index].active;
     }
   }
 
   updateAudioStreamGain(streamIndex: number, gain: number) {
-    const index = this.audioStreams.findIndex(x => x.streamIndex == streamIndex)
+    const index = this.audioStreams.findIndex((x) => x.streamIndex == streamIndex);
     if (index != -1) {
       this.audioStreams[index].gain = gain;
     }
@@ -172,54 +171,55 @@ class VideoEditorStore {
     return estimateVideoSize(this.exportBitrateKbps ?? 0, this.trimDurationSeconds);
   }
 
-  exportPath: string = ""
+  exportPath = "";
 
   setExportPath(path: string) {
     this.exportPath = path;
 
-    const filePathParts = path.split('.');
+    const filePathParts = path.split(".");
     this.exportFormat = filePathParts.length > 1 ? filePathParts[filePathParts.length - 1] : "";
   }
 
-  exportFormat: string = ""
+  exportFormat = "";
 
   setExportFormat(format: string) {
     this.exportFormat = format;
     this.exportPath = replaceExtension(this.exportPath, this.exportFormat);
   }
 
-  exportResolution: string = "1920x1080"
+  exportResolution = "1920x1080";
 
   setExportResolution(resolution: string) {
     this.exportResolution = resolution;
   }
 
-  exportBitrateKbps: number | null = null
+  exportBitrateKbps: number | null = null;
 
   setExportBitrateKbps(bitrateKbps: number | null) {
     this.exportBitrateKbps = bitrateKbps;
   }
 
-  exportFrameRate: number | null = 60
+  exportFrameRate: number | null = 60;
 
   setExportFrameRate(exportFrameRate: number | null) {
     this.exportFrameRate = exportFrameRate;
   }
 
-  exportVideoEncoder: string | null = null
+  exportVideoEncoder: string | null = null;
 
   setExportVideoEncoder(exportVideoEncoder: string | null) {
     this.exportVideoEncoder = exportVideoEncoder;
   }
 
-  exportGpuAcceleration: GpuAcceleration | null = null
+  exportGpuAcceleration: GpuAcceleration | null = null;
 
   setExportGpuAcceleration(exportGpuAcceleration: GpuAcceleration | null) {
     this.exportGpuAcceleration = exportGpuAcceleration;
 
     switch (exportGpuAcceleration) {
       case "nvidia":
-        if (this.exportVideoEncoder == null && this.exportFormat == "mp4") this.exportVideoEncoder = "h264_nvenc";
+        if (this.exportVideoEncoder == null && this.exportFormat == "mp4")
+          this.exportVideoEncoder = "h264_nvenc";
         break;
     }
   }
@@ -236,21 +236,27 @@ class VideoEditorStore {
         frameRate: this.exportFrameRate,
         videoCodec: this.exportVideoEncoder,
         gpuAcceleration: this.exportGpuAcceleration,
-        activeAudioStreams: this.audioStreams.filter(x => x.active).map(x => ({
-          index: x.streamIndex,
-          gain: gainToGainValue(x.gain)
-        })),
-      }
-    })
+        activeAudioStreams: this.audioStreams
+          .filter((x) => x.active)
+          .map((x) => ({
+            index: x.streamIndex,
+            gain: gainToGainValue(x.gain),
+          })),
+      },
+    });
   }
 
-  constructor(appStateStore: AppStateStore, path: string, videoAudioStreamsInfo: VideoAudioStreamsInfo = {audioStreams: [], duration: 0}) {
-    makeAutoObservable(this, {}, {autoBind: true})
+  constructor(
+    appStateStore: AppStateStore,
+    path: string,
+    videoAudioStreamsInfo: VideoAudioStreamsInfo = {audioStreams: [], duration: 0},
+  ) {
+    makeAutoObservable(this, {}, {autoBind: true});
 
     this.appStateStore = appStateStore;
 
     this.path = path;
-    this.audioStreams = videoAudioStreamsInfo.audioStreams.map(x => ({
+    this.audioStreams = videoAudioStreamsInfo.audioStreams.map((x) => ({
       streamIndex: x.index,
       active: true,
       gain: 100,
@@ -261,7 +267,7 @@ class VideoEditorStore {
     this.trimEnd = null;
 
     this.setVideoDuration(videoAudioStreamsInfo.duration);
-    this.setExportPath(addPostfixToFilename(path, " - Trim"))
+    this.setExportPath(addPostfixToFilename(path, " - Trim"));
   }
 }
 

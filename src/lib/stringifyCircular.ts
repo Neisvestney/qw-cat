@@ -10,10 +10,10 @@ export function stringifyCircular<T>(obj: T) {
     }
 
     if (value instanceof HTMLElement) {
-      return "[HTMLElement]"
+      return "[HTMLElement]";
     }
     if (value instanceof Window) {
-      return "[Window]"
+      return "[Window]";
     }
 
     return value;

@@ -11,10 +11,10 @@ const logLevelsColors = {
   [LogLevel.Info]: c.reset,
   [LogLevel.Warn]: c.yellow,
   [LogLevel.Error]: c.red,
-}
+};
 
 function mapLine(entry: LogRecord) {
-  return `${logLevelsColors[entry.level](c.stripColor(entry.message))}`
+  return `${logLevelsColors[entry.level](c.stripColor(entry.message))}`;
 }
 
 export interface LogRecord {
@@ -23,53 +23,53 @@ export interface LogRecord {
 }
 
 class LogsStore {
-  logs: LogRecord[] = []
+  logs: LogRecord[] = [];
 
   private disposer: AsyncEventsDisposer | null = null;
 
   constructor() {
-    makeAutoObservable(this, {}, {autoBind: true})
+    makeAutoObservable(this, {}, {autoBind: true});
   }
 
   async init() {
-    let disposer = createAsyncEventsDisposer()
+    const disposer = createAsyncEventsDisposer();
     this.disposer = disposer;
-    await disposer.add(() => attachLogger((e) => this.addLogEntry(e, disposer)))
-    await this.fetchLogs()
+    await disposer.add(() => attachLogger((e) => this.addLogEntry(e, disposer)));
+    await this.fetchLogs();
   }
 
   dispose() {
-    this.disposer?.dispose()
+    this.disposer?.dispose();
   }
 
   addLogEntry(entry: LogRecord, disposer: AsyncEventsDisposer) {
     if (disposer.isDisposed) return;
-    this.logs.push(entry)
+    this.logs.push(entry);
   }
 
-  logsWindowOpen = false
+  logsWindowOpen = false;
 
   setLogsWindowOpen(open: boolean) {
     this.logsWindowOpen = open;
   }
 
   get lines() {
-    return this.logs.map(mapLine)
+    return this.logs.map(mapLine);
   }
 
   get lastLine() {
-    const entry = this.logs[this.logs.length - 1]
-    return entry ? mapLine(entry) : ""
+    const entry = this.logs[this.logs.length - 1];
+    return entry ? mapLine(entry) : "";
   }
 
   async fetchLogs() {
-    const log = await getLogs()
+    const log = await getLogs();
     runInAction(() => {
-      this.logs.push(...log as unknown as LogRecord[])
-    })
+      this.logs.push(...(log as unknown as LogRecord[]));
+    });
   }
 }
 
-export const LogsStoreContext = React.createContext<LogsStore>(null!)
+export const LogsStoreContext = React.createContext<LogsStore>(null!);
 
 export default LogsStore;

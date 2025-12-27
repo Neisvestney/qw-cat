@@ -21,7 +21,6 @@
 </p>
 <br/>
 
-
 ## Overview
 
 [![GitHub Release](https://img.shields.io/github/v/release/Neisvestney/qw-cat?display_name=release&style=flat-square&label=Latest%20version)](https://github.com/Neisvestney/qw-cat/releases/latest)
