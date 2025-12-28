@@ -1,4 +1,5 @@
-use crate::ffmpeg::{FfmpegTasksQueue, enqueue_export_video_task};
+use crate::ffmpeg::{FfmpegTasksQueue, cancel_ffmpeg_task, enqueue_export_video_task};
+use log::info;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
@@ -37,4 +38,15 @@ pub async fn ffmpeg_export(app_handle: tauri::AppHandle, options: ExportOptions)
     let ffmpeg_tasks_queue = app_handle.state::<FfmpegTasksQueue>();
 
     enqueue_export_video_task(&ffmpeg_tasks_queue, options).await;
+}
+
+#[tauri::command]
+pub async fn cancel_ffmpeg_task_by_index(app_handle: tauri::AppHandle, task_index: usize) {
+    let ffmpeg_tasks_queue = app_handle.state::<FfmpegTasksQueue>();
+    let ffmpeg_tasks_queue = ffmpeg_tasks_queue.lock().await;
+    let task = ffmpeg_tasks_queue.get(task_index);
+    info!("task to cancel: {:?}", task);
+    if let Some(task) = task {
+        cancel_ffmpeg_task(task).await;
+    }
 }

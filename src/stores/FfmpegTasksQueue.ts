@@ -1,6 +1,7 @@
 import {makeAutoObservable, runInAction} from "mobx";
 import {FfmpegTask} from "../generated/bindings/FfmpegTask.ts";
 import {AsyncEventsDisposer} from "../lib/createAsyncEventsDisposer.ts";
+import {cancelFfmpegTaskByIndex} from "../generated";
 
 class FfmpegTasksQueue {
   ffmpegTasks: FfmpegTask[] = [];
@@ -25,6 +26,10 @@ class FfmpegTasksQueue {
         this.ffmpegTasks = message.payload;
       });
     });
+  }
+
+  async cancelTask(taskIndex: number) {
+    await cancelFfmpegTaskByIndex({taskIndex});
   }
 }
 

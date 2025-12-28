@@ -12,10 +12,12 @@ use ffmpeg_sidecar::paths::ffmpeg_path;
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::io::Write;
+use std::process::ChildStdin;
 use std::sync::Arc;
 use tauri::window::{ProgressBarState, ProgressBarStatus};
-use tauri::{Emitter, Manager};
-use tokio::sync::{Mutex, MutexGuard, RwLock, oneshot};
+use tauri::{Emitter, Manager, async_runtime};
+use tokio::sync::{Mutex, MutexGuard, RwLock, mpsc, oneshot};
 
 const WEB_SUPPORTED_AUDIO_CODECS: [&str; 9] = [
     "aac",       // AAC (MP4/M4A) – all modern browsers
@@ -47,6 +49,8 @@ const WEB_SUPPORTED_AUDIO_CODECS_CONTAINERS: [&str; 9] = [
 pub struct FfmpegTask {
     status: FfmpegTaskStatus,
     task_type: FfmpegTaskType,
+    #[serde(skip)]
+    ffmpeg_stdin: Option<mpsc::Sender<String>>,
 }
 
 impl FfmpegTask {
@@ -54,6 +58,7 @@ impl FfmpegTask {
         Self {
             status: FfmpegTaskStatus::Queued,
             task_type,
+            ffmpeg_stdin: None,
         }
     }
 }
@@ -65,6 +70,7 @@ pub enum FfmpegTaskStatus {
     InProgress { progress: f64 },
     Finished,
     Failed,
+    Cancelled,
 }
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS)]
@@ -401,6 +407,9 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
 
                         let mut ffmpeg_child = ffmpeg_command.spawn().unwrap();
 
+                        let child_std_in = ffmpeg_child.take_stdin().unwrap();
+                        async_runtime::spawn(handle_ffmpeg_stdin(child_std_in, ffmpeg_task_clone.clone()));
+
                         ffmpeg_child.iter().unwrap().for_each(|e| match e {
                             FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, e) => {
                                 error!("Ffmpeg: {e}")
@@ -437,13 +446,16 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                 .flatten();
 
                 let mut ffmpeg_task = ffmpeg_task.write().await;
-                if ffmpeg_result.is_some() {
-                    ffmpeg_task.status = FfmpegTaskStatus::Finished;
-                    if let FfmpegTaskType::ExportVideo { result, .. } = &mut ffmpeg_task.task_type {
-                        *result = ffmpeg_result.clone();
+                info!("Task finished: {:?}", ffmpeg_task);
+                if ffmpeg_task.status != FfmpegTaskStatus::Cancelled {
+                    if ffmpeg_result.is_some() {
+                        ffmpeg_task.status = FfmpegTaskStatus::Finished;
+                        if let FfmpegTaskType::ExportVideo { result, .. } = &mut ffmpeg_task.task_type {
+                            *result = ffmpeg_result.clone();
+                        }
+                    } else {
+                        ffmpeg_task.status = FfmpegTaskStatus::Failed;
                     }
-                } else {
-                    ffmpeg_task.status = FfmpegTaskStatus::Failed;
                 }
                 drop(ffmpeg_task);
             }
@@ -527,19 +539,48 @@ pub async fn emit_ffmpeg_queue_status() {
     app_handle.emit("ffmpeg-queue", tasks).unwrap();
 }
 
+async fn handle_ffmpeg_stdin(mut stdin: ChildStdin, ffmpeg_task: Arc<RwLock<FfmpegTask>>) {
+    let (tx, mut rx) = mpsc::channel::<String>(100);
+
+    ffmpeg_task.write().await.ffmpeg_stdin.replace(tx);
+
+    while let Some(s) = rx.recv().await {
+        debug!("Received ffmpeg stdin: {s}");
+        stdin.write_all(s.as_bytes()).unwrap();
+    }
+}
+
+#[allow(clippy::collapsible_if)]
+pub async fn cancel_ffmpeg_task(ffmpeg_task: &Arc<RwLock<FfmpegTask>>) {
+    let mut ffmpeg_task = ffmpeg_task.write().await;
+    if let Some(ffmpeg_stdin) = &ffmpeg_task.ffmpeg_stdin {
+        if ffmpeg_stdin.send("q".to_string()).await.is_ok() {
+            debug!("Sent q to ffmpeg stdin");
+            ffmpeg_task.status = FfmpegTaskStatus::Cancelled;
+        }
+    }
+}
+
 fn handle_ffmpeg_progress(p: FfmpegProgress, ffmpeg_task: &Arc<RwLock<FfmpegTask>>, total_duration: f64) {
     let ffmpeg_task_clone = ffmpeg_task.clone();
     debug!("FFmpeg progress event: {:?}", p);
     tokio::spawn(async move {
         let mut ffmpeg_task = ffmpeg_task_clone.write().await;
-        let progress = FfmpegTimeDuration::from_str(&p.time)
-            .map(FfmpegTimeDuration::as_seconds)
-            .unwrap_or_default()
-            / total_duration;
-        ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
+
+        let progress = if ffmpeg_task.status != FfmpegTaskStatus::Cancelled {
+            let progress = FfmpegTimeDuration::from_str(&p.time)
+                .map(FfmpegTimeDuration::as_seconds)
+                .unwrap_or_default()
+                / total_duration;
+            ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
+            Some(progress)
+        } else {
+            None
+        };
+
         drop(ffmpeg_task);
         emit_ffmpeg_queue_status().await;
-        set_main_window_progress_bar(Some(progress));
+        set_main_window_progress_bar(progress);
         // println!("ffmpeg progress: {}%", progress * 100.0);
     });
 }
