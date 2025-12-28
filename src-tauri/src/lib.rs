@@ -1,6 +1,7 @@
 mod ffmpeg;
 mod ffmpeg_download;
 mod ffmpeg_export_command;
+mod ffmpeg_path;
 mod ffmpeg_time_duration;
 mod ffprobe;
 mod handle_cli_args;

@@ -1,14 +1,14 @@
 use crate::APP_HANDLE;
 use crate::ffmpeg_download::download_with_progress;
 use crate::ffmpeg_export_command::{ExportOptions, GpuAcceleration};
+use crate::ffmpeg_path::{ffmpeg_is_installed, ffmpeg_path};
 use crate::ffmpeg_time_duration::FfmpegTimeDuration;
 use crate::ffprobe::{get_video_audio_streams_info, get_video_streams_info};
 use crate::select_new_video_file_command::AudioStreamFilePath;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use ffmpeg_sidecar::command::{FfmpegCommand, ffmpeg_is_installed};
+use ffmpeg_sidecar::command::FfmpegCommand;
 use ffmpeg_sidecar::event::{FfmpegEvent, FfmpegProgress, LogLevel};
-use ffmpeg_sidecar::paths::ffmpeg_path;
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -255,7 +255,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             return Some(result);
                         }
 
-                        let mut ffmpeg_command = FfmpegCommand::new();
+                        let mut ffmpeg_command = FfmpegCommand::new_with_path(ffmpeg_path());
 
                         ffmpeg_command.input(&video_file_path).arg("-y").args(maps.split_whitespace());
 
@@ -370,7 +370,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             format!("aevalsrc=0:d={}[a]", options.end_time - options.start_time)
                         };
 
-                        let mut ffmpeg_command = FfmpegCommand::new();
+                        let mut ffmpeg_command = FfmpegCommand::new_with_path(ffmpeg_path());
 
                         if let Some((args, codec, _)) = gpu_acceleration {
                             ffmpeg_command.args(args.split_whitespace());

@@ -1,14 +1,15 @@
+use crate::ffmpeg_path::{ffmpeg_is_installed, sidecar_dir};
 use anyhow::Result;
-use ffmpeg_sidecar::command::ffmpeg_is_installed;
 use ffmpeg_sidecar::download::{ffmpeg_download_url, unpack_ffmpeg};
-use ffmpeg_sidecar::paths::sidecar_dir;
-use log::debug;
+use log::{debug, info};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 pub fn download_with_progress(progress_callback: impl Fn(f64)) -> Result<()> {
     progress_callback(0.0);
     let download_url = ffmpeg_download_url()?;
     let destination = sidecar_dir()?;
+    info!("{:?}", destination);
     let archive_path = download_ffmpeg_package_with_progress(download_url, &destination, |(total, downloaded)| {
         progress_callback(downloaded as f64 / total as f64)
     })?;
@@ -44,6 +45,9 @@ pub fn download_ffmpeg_package_with_progress(url: &str, download_dir: &Path, pro
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(0);
 
+    info!("{:?}", archive_path);
+    fs::create_dir_all(archive_path.parent().context("Failed to create directory for ffmpeg download")?)
+        .context("Failed to create directory for ffmpeg download")?;
     let mut file = File::create(&archive_path).context("Failed to create file for ffmpeg download")?;
 
     // Wrapper to track progress during io::copy

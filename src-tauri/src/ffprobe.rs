@@ -1,4 +1,4 @@
-use ffmpeg_sidecar::ffprobe::{ffprobe_is_installed, ffprobe_path};
+use crate::ffmpeg_path::{ffprobe_is_installed, ffprobe_path};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use ts_rs::TS;
