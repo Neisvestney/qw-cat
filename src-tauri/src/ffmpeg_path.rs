@@ -31,8 +31,14 @@ pub fn ffprobe_path() -> PathBuf {
     }
 }
 
+#[cfg(windows)]
+const APP_DIRECTORY: &str = "Qw Cat";
+
+#[cfg(not(windows))]
+const APP_DIRECTORY: &str = "qw-cat";
+
 pub fn sidecar_path() -> anyhow::Result<PathBuf> {
-    let mut path = dirs::data_local_dir().context("Can't get data_local_dir")?.join("Qw Cat").join("ffmpeg");
+    let mut path = dirs::data_local_dir().context("Can't get data_local_dir")?.join(APP_DIRECTORY).join("ffmpeg");
     if cfg!(windows) {
         path.set_extension("exe");
     }
