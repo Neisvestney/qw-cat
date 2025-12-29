@@ -1,3 +1,4 @@
+use crate::APP_IDENTIFIER;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderValue, Request};
@@ -21,7 +22,6 @@ use tower_http::{
     services::ServeFile,
     trace::TraceLayer,
 };
-use crate::APP_IDENTIFIER;
 
 pub const INTEGRATED_SERVER_PORT_RANGE: std::ops::RangeInclusive<u16> = 38125..=39125;
 
