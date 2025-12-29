@@ -47,6 +47,7 @@ implemented.
 
 You can install FFmpeg before launching the application if you want to use it right away.  
 
+For linux you also need to [install](https://gstreamer.freedesktop.org/documentation/installing/on-linux.html?gi-language=c) `gstreamer` with plugins to be able to play videos.  
 For KDE Plasma you can install `libunity9` package to display a progress bar in the taskbar.  
 
 **Note:** The application has not been tested on macOS yet.
