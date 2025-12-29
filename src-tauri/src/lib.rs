@@ -29,6 +29,8 @@ use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
+pub const APP_IDENTIFIER: &str = "io.github.neisvestney.qw-cat";
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

@@ -21,6 +21,7 @@ use tower_http::{
     services::ServeFile,
     trace::TraceLayer,
 };
+use crate::APP_IDENTIFIER;
 
 pub const INTEGRATED_SERVER_PORT_RANGE: std::ops::RangeInclusive<u16> = 38125..=39125;
 
@@ -118,7 +119,7 @@ pub async fn serve_video(Path(path): Path<String>, State(state): State<Integrate
     let path = match files.contains(&path_buf) {
         true => path_buf,
         false => {
-            let temp_dir = std::env::temp_dir().join("qw-cat");
+            let temp_dir = std::env::temp_dir().join(APP_IDENTIFIER);
             let canonical_temp = match temp_dir.canonicalize() {
                 Ok(p) => p,
                 Err(_) => return StatusCode::NOT_FOUND.into_response(),

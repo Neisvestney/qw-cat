@@ -1,4 +1,4 @@
-use crate::APP_HANDLE;
+use crate::{APP_HANDLE, APP_IDENTIFIER};
 use crate::ffmpeg_download::download_with_progress;
 use crate::ffmpeg_export_command::{ExportOptions, GpuAcceleration};
 use crate::ffmpeg_path::{ffmpeg_is_installed, ffmpeg_path};
@@ -176,7 +176,7 @@ pub async fn run_next_task(queue: MutexGuard<'_, Vec<Arc<RwLock<FfmpegTask>>>>) 
 }
 
 fn get_audio_file_path(video_file_path: &str, audio_stream_index: i32, format: &str) -> String {
-    let tmp_folder = std::env::temp_dir().join("com.qw-cat.app");
+    let tmp_folder = std::env::temp_dir().join(APP_IDENTIFIER);
     std::fs::create_dir_all(&tmp_folder).unwrap();
     let audio_file_name = format!("audio_{}_{}.{}", BASE64_STANDARD.encode(video_file_path), audio_stream_index, format);
 

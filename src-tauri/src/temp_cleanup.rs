@@ -5,10 +5,11 @@ use std::{
 
 use tokio::fs;
 use tokio::io;
+use crate::APP_IDENTIFIER;
 
 pub async fn cleanup_temp() -> io::Result<()> {
     let mut dir: PathBuf = std::env::temp_dir();
-    dir.push("com.qw-cat.app");
+    dir.push(APP_IDENTIFIER);
 
     // If the directory doesn't exist, nothing to do
     if !dir.exists() {
