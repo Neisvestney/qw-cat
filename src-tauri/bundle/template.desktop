@@ -12,6 +12,7 @@ Type=Application
 {{#if mime_type}}
 MimeType={{mime_type}}
 {{/if}}
+StartupNotify=false
 Actions=new-window;
 
 [Desktop Action new-window]
