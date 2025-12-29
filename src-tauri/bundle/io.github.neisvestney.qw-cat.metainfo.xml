@@ -11,7 +11,9 @@
     <p>Install <code>libunity9</code> on KDE Plasma to display a progress bar in the taskbar</p>
   </description>
 
-  <developer_name>Neisvestney</developer_name>
+  <developer id="io.github.neisvestney">
+    <name>Neisvestney</name>
+  </developer>
 
   <url type="homepage">https://github.com/Neisvestney/qw-cat#readme</url>
   <url type="bugtracker">https://github.com/Neisvestney/qw-cat/issues</url>
