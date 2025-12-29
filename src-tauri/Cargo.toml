@@ -3,6 +3,7 @@ name = "qw-cat"
 version = "0.3.1"
 description = "View and trim video"
 authors = ["Neisvestney"]
+license = "MIT"
 repository = "https://github.com/Neisvestney/qw-cat"
 homepage = "https://github.com/Neisvestney/qw-cat#readme"
 edition = "2024"

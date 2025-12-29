@@ -33,6 +33,7 @@
       "icons/icon.ico"
     ],
     "category": "Video",
+    "longDescription": "Desktop application designed for quick video trimming and processing.\nBuilt with Tauri v2 and React, powered by FFmpeg.\nYou can install ffmpeg from your package manager before launching the app.",
     "targets": ["nsis", "deb", "rpm", "appimage"],
     "windows": {
       "nsis": {
@@ -42,13 +43,19 @@
     },
     "linux": {
       "deb": {
-        "recommends": ["ffmpeg"],
+        "recommends": ["ffmpeg", "libunity9"],
         "section": "video",
-        "desktopTemplate": "./bundle/template.desktop"
+        "desktopTemplate": "./bundle/template.desktop",
+        "files": {
+          "/usr/share/metainfo/io.github.neisvestney.qw-cat.metainfo.xml": "bundle/io.github.neisvestney.qw-cat.metainfo.xml"
+        }
       },
       "rpm": {
-        "recommends": ["ffmpeg"],
-        "desktopTemplate": "./bundle/template.desktop"
+        "recommends": ["ffmpeg", "libunity9"],
+        "desktopTemplate": "./bundle/template.desktop",
+        "files": {
+          "/usr/share/metainfo/io.github.neisvestney.qw-cat.metainfo.xml": "bundle/io.github.neisvestney.qw-cat.metainfo.xml"
+        }
       },
       "appimage": {
         "bundleMediaFramework": true
@@ -61,7 +68,7 @@
       }
     ]
   },
-  "identifier": "com.qw-cat.app",
+  "identifier": "io.github.neisvestney.qw-cat",
   "plugins": {
     "typegen": {
       "excludePatterns": null,

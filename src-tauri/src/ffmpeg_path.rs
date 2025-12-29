@@ -37,7 +37,7 @@ pub fn ffprobe_path() -> PathBuf {
 const APP_DIRECTORY: &str = "Qw Cat";
 
 #[cfg(not(windows))]
-const APP_DIRECTORY: &str = "com.qw-cat.app";
+const APP_DIRECTORY: &str = "io.github.neisvestney.qw-cat";
 
 pub fn sidecar_path() -> anyhow::Result<PathBuf> {
     let mut path = dirs::data_local_dir()

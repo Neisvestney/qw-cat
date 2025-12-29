@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+  <id>io.github.neisvestney.qw-cat</id>
+  <name>Qw Cat</name>
+  <summary>View and trim video</summary>
+
+  <description>
+    <p>Desktop application designed for quick video trimming and processing.</p>
+    <p>Built with Tauri v2 and React, powered by FFmpeg.</p>
+    <p>You can install ffmpeg from your package manager before launching the app.</p>
+    <p>Install <code>libunity9</code> on KDE Plasma to display a progress bar in the taskbar</p>
+  </description>
+
+  <developer_name>Neisvestney</developer_name>
+
+  <url type="homepage">https://github.com/Neisvestney/qw-cat#readme</url>
+  <url type="bugtracker">https://github.com/Neisvestney/qw-cat/issues</url>
+
+  <launchable type="desktop-id">Qw Cat.desktop</launchable>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+</component>
