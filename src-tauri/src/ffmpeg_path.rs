@@ -17,16 +17,18 @@ pub fn ffmpeg_path() -> PathBuf {
 pub fn ffprobe_path() -> PathBuf {
     let default = Path::new("ffprobe").to_path_buf();
     match sidecar_path() {
-        Ok(sidecar_path) => match sidecar_path
-            .parent()
-            .map(|p| p.to_owned())
-            .unwrap_or(PathBuf::new())
-            .join("ffprobe")
-            .exists()
-        {
-            true => sidecar_path,
-            false => default,
-        },
+        Ok(sidecar_path) => {
+            let mut sidecar_path = sidecar_path.parent().map(|p| p.to_owned()).unwrap_or(PathBuf::new()).join("ffprobe");
+
+            if cfg!(windows) {
+                sidecar_path.set_extension("exe");
+            }
+
+            match sidecar_path.exists() {
+                true => sidecar_path,
+                false => default,
+            }
+        }
         Err(_) => default,
     }
 }
@@ -35,10 +37,13 @@ pub fn ffprobe_path() -> PathBuf {
 const APP_DIRECTORY: &str = "Qw Cat";
 
 #[cfg(not(windows))]
-const APP_DIRECTORY: &str = "qw-cat";
+const APP_DIRECTORY: &str = "com.qw-cat.app";
 
 pub fn sidecar_path() -> anyhow::Result<PathBuf> {
-    let mut path = dirs::data_local_dir().context("Can't get data_local_dir")?.join(APP_DIRECTORY).join("ffmpeg");
+    let mut path = dirs::data_local_dir()
+        .context("Can't get data_local_dir")?
+        .join(APP_DIRECTORY)
+        .join("ffmpeg");
     if cfg!(windows) {
         path.set_extension("exe");
     }

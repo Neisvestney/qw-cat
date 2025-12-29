@@ -1,4 +1,5 @@
 use crate::ffmpeg_path::{ffprobe_is_installed, ffprobe_path};
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use ts_rs::TS;
@@ -92,6 +93,8 @@ pub fn get_video_audio_streams_info(path: impl AsRef<str>) -> Option<VideoAudioS
 
 pub fn get_video_streams_info(path: impl AsRef<str>) -> Option<FfprobeOutput> {
     let ffprobe_path = ffprobe_path();
+
+    info!("Using ffprobe: {:?}", ffprobe_path);
 
     if !ffprobe_is_installed() {
         return None;

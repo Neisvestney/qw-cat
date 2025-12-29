@@ -8,7 +8,7 @@ use tokio::io;
 
 pub async fn cleanup_temp() -> io::Result<()> {
     let mut dir: PathBuf = std::env::temp_dir();
-    dir.push("qw-cat");
+    dir.push("com.qw-cat.app");
 
     // If the directory doesn't exist, nothing to do
     if !dir.exists() {
