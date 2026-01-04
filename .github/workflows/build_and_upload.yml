@@ -94,7 +94,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           cd ${{ github.workspace }}
-          gh release upload ${{ github.event.release.tag_name }} ./src-tauri/bundle/generated/io.github.neisvestney.qw-cat.yml#Flatpak manifest
+          gh release upload ${{ github.event.release.tag_name }} "./src-tauri/bundle/generated/io.github.neisvestney.qw-cat.yml#Flatpak manifest"
         env:
           GITHUB_TOKEN: ${{ github.TOKEN }}
         shell: bash
