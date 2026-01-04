@@ -1,0 +1,60 @@
+app-id: io.github.neisvestney.qw-cat
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+command: qw-cat
+
+
+finish-args:
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  # - --socket=x11
+  - --share=ipc
+  - --device=dri
+  - --socket=pulseaudio
+  - --filesystem=home
+  - --filesystem=xdg-config/kdeglobals:ro
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.impl.portal.desktop.kde
+
+modules:
+  - name: qw-cat
+    buildsystem: simple
+    build-commands:
+      - ls
+      - ar x bundle.deb
+      - tar -xf data.tar.*
+
+      - sed -i 's/^Icon=.*/Icon=io.github.neisvestney.qw-cat/' "usr/share/applications/Qw Cat.desktop"
+      - sed -i 's|\(<launchable type="desktop-id">\)[^<]*\(</launchable>\)|\1io.github.neisvestney.qw-cat.desktop\2|' usr/share/metainfo/io.github.neisvestney.qw-cat.metainfo.xml
+      - sed -i 's|\(<icon type="stock">\)[^<]*\(</icon>\)|\1io.github.neisvestney.qw-cat\2|' usr/share/metainfo/io.github.neisvestney.qw-cat.metainfo.xml
+
+      - install -Dm755 usr/bin/qw-cat /app/bin/qw-cat
+      - install -Dm644 "usr/share/applications/Qw Cat.desktop" /app/share/applications/io.github.neisvestney.qw-cat.desktop
+      - install -Dm644 usr/share/icons/hicolor/32x32/apps/qw-cat.png /app/share/icons/hicolor/32x32/apps/io.github.neisvestney.qw-cat.png
+      - install -Dm644 usr/share/icons/hicolor/128x128/apps/qw-cat.png /app/share/icons/hicolor/128x128/apps/io.github.neisvestney.qw-cat.png
+      - install -Dm644 usr/share/icons/hicolor/256x256@2/apps/qw-cat.png /app/share/icons/hicolor/256x256/apps/io.github.neisvestney.qw-cat.png
+      - install -Dm644 usr/share/icons/hicolor/256x256@2/apps/qw-cat.png /app/share/icons/hicolor/256x256@2/apps/io.github.neisvestney.qw-cat.png
+      - install -Dm644 usr/share/metainfo/io.github.neisvestney.qw-cat.metainfo.xml /app/share/metainfo/io.github.neisvestney.qw-cat.metainfo.xml
+
+    sources:
+      {{#if local}}
+      - type: file
+        dest-filename: bundle.deb
+        path: ../../target/release/bundle/deb/Qw Cat_{{version_and_arch}}.deb
+      {{else}}
+      - type: file
+        url: {{amd.url}}
+        sha256: {{amd.sha256}}
+        dest-filename: bundle.deb
+        only-arches:
+          - x86_64
+      - type: file
+        url: {{arm.url}}
+        sha256: {{arm.sha256}}
+        dest-filename: bundle.deb
+        only-arches:
+          - aarch64
+      {{/if}}

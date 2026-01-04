@@ -62,6 +62,8 @@ For KDE Plasma you can install `libunity9` package to display a progress bar in 
 
 - Run `yarn tauri build`
 
+To generate flatpak manifest run `node ./src-tauri/bundle/render-templates.js local <versionFromCargoToml>`
+
 ## Contributing
 
 Pull requests are welcome.  

@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+src-tauri/bundle/generated
+
+# Flatpak
+.flatpak-builder
+build-dir
+repo

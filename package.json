@@ -1,7 +1,7 @@
 {
   "name": "qw-cat",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -29,6 +29,7 @@
     "ansi-colors": "^4.1.3",
     "eslint-plugin-mobx": "^0.0.13",
     "format-duration": "^3.0.2",
+    "handlebars": "^4.7.8",
     "mdi-material-ui": "^7.9.4",
     "mobx": "^6.15.0",
     "mobx-react-lite": "^4.1.1",

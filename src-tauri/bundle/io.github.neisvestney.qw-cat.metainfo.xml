@@ -11,6 +11,11 @@
     <p>Install <code>libunity9</code> on KDE Plasma to display a progress bar in the taskbar</p>
   </description>
 
+  <categories>
+    <category>Video</category>
+    <category>AudioVideo</category>
+  </categories>
+
   <developer id="io.github.neisvestney">
     <name>Neisvestney</name>
   </developer>
@@ -20,6 +25,48 @@
 
   <launchable type="desktop-id">Qw Cat.desktop</launchable>
 
+  <icon type="stock">qw-cat</icon>
+
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
+  <content_rating type="oars-1.1" />
+
+  <screenshots>
+    <screenshot type="default">
+      <image>https://i.postimg.cc/gJSMC7Fw/Screenshot-20260103-162406.png</image>
+      <caption>Video view with timeline</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://i.postimg.cc/j2D8thRT/Screenshot-20260103-162230.png</image>
+      <caption>Export view modal</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://i.postimg.cc/kG2jqy79/Screenshot-20260103-162149.png</image>
+      <caption>Video view with timeline in default state</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://i.postimg.cc/PJC6TMT9/Screenshot-20260103-161528.png</image>
+      <caption>App start page</caption>
+    </screenshot>
+  </screenshots>
+
+  <releases>
+    <release version="0.3.3" date="2026-01-04">
+      <url>https://github.com/Neisvestney/qw-cat/releases/tag/v0.3.3</url>
+
+      <description>
+        <ul>
+          <li>Updated AppStream metainfo</li>
+          <li>Changed default theme of a window to Dark</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.2" date="2025-12-30">
+      <url>https://github.com/Neisvestney/qw-cat/releases/tag/v0.3.2</url>
+
+      <description>
+        <p>This release fixes bugs.</p>
+      </description>
+    </release>
+  </releases>
 </component>
