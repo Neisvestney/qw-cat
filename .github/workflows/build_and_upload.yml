@@ -93,10 +93,12 @@ jobs:
       - name: Generate flatpak manifest
         run: node ./src-tauri/bundle/render-templates.js remote ${{ github.event.release.tag_name }}
 
+      - name: Mark workspace as safe
+        run: git config --global --add safe.directory .
+
       - name: 'Upload flatpak manifest'
         if: matrix.platform == 'ubuntu-22.04'
         run: |
-
           gh release upload ${{ github.event.release.tag_name }} "./src-tauri/bundle/generated/io.github.neisvestney.qw-cat.yml#Flatpak manifest (yml)"
         env:
           GITHUB_TOKEN: ${{ github.TOKEN }}
