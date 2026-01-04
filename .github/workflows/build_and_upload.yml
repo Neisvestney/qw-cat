@@ -73,6 +73,9 @@ jobs:
     permissions:
       contents: write
     runs-on: ${{ matrix.platform }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-49
+      options: --privileged
     needs: [ build-tauri ]
 
     steps:
@@ -94,7 +97,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           cd ${{ github.workspace }}
-          gh release upload ${{ github.event.release.tag_name }} "./src-tauri/bundle/generated/io.github.neisvestney.qw-cat.yml#Flatpak manifest"
+          gh release upload ${{ github.event.release.tag_name }} "./src-tauri/bundle/generated/io.github.neisvestney.qw-cat.yml#Flatpak manifest (yml)"
         env:
           GITHUB_TOKEN: ${{ github.TOKEN }}
         shell: bash
