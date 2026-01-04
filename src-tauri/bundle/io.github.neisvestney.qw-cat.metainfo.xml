@@ -51,8 +51,17 @@
   </screenshots>
 
   <releases>
+    <release version="0.3.4" date="2026-01-04">
+      <url>https://github.com/Neisvestney/qw-cat/releases/tag/v0.3.4</url>
+
+      <description>
+        <ul>
+          <li>Fix some ui bugs</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.3" date="2026-01-04">
-      <url>https://github.com/Neisvestney/qw-cat/releases/tag/v0.3.3</url>
+      <url>https://github.com/Neisvestney/qw-cat/releases/tag/v0.3.3-6</url>
 
       <description>
         <ul>

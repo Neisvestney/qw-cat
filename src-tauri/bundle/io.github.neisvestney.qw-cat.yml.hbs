@@ -9,15 +9,13 @@ finish-args:
   - --share=network
   - --socket=wayland
   - --socket=fallback-x11
-  # - --socket=x11
   - --share=ipc
   - --device=dri
   - --socket=pulseaudio
   - --filesystem=home
-  - --filesystem=xdg-config/kdeglobals:ro
   - --talk-name=org.freedesktop.Notifications
   - --talk-name=org.freedesktop.portal.Desktop
-  - --talk-name=org.freedesktop.impl.portal.desktop.kde
+  - --talk-name=org.freedesktop.FileManager1
 
 modules:
   - name: qw-cat

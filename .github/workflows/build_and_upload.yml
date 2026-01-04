@@ -89,7 +89,6 @@ jobs:
       - name: Install frontend dependencies
         run: yarn install
 
-
       - name: Generate flatpak manifest
         run: node ./src-tauri/bundle/render-templates.js remote ${{ github.event.release.tag_name }}
 
@@ -138,5 +137,6 @@ jobs:
               repo: context.repo.repo,
               release_id: process.env.release_id,
               draft: false,
-              prerelease: false
+              prerelease: false,
+              make_latest: "true"
             })
