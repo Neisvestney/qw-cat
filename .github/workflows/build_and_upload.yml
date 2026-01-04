@@ -105,7 +105,7 @@ jobs:
 
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          bundle: qw-cat-${{ matrix.arch }}-${{ github.event.release.tag_name }}.flatpak
+          bundle: qw-cat-${{ github.event.release.tag_name }}-${{ matrix.arch }}.flatpak
           manifest-path: ./src-tauri/bundle/generated/io.github.neisvestney.qw-cat.yml
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.arch }}
@@ -113,7 +113,7 @@ jobs:
 
       - name: 'Upload flatpak artifact'
         run: |
-          gh release upload ${{ github.event.release.tag_name }} qw-cat-${{ matrix.arch }}-${{ github.event.release.tag_name }}.flatpak
+          gh release upload ${{ github.event.release.tag_name }} qw-cat-${{ github.event.release.tag_name }}-${{ matrix.arch }}.flatpak
         env:
           GITHUB_TOKEN: ${{ github.TOKEN }}
         shell: bash
