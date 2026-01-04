@@ -88,7 +88,7 @@ jobs:
 
 
       - name: Generate flatpak manifest
-        run: node ./src-tauri/bundle/render-templates.js remote ${{ github.event.release.tag }}
+        run: node ./src-tauri/bundle/render-templates.js remote ${{ github.event.release.tag_name }}
 
       - name: 'Upload flatpak manifest'
         if: matrix.platform == 'ubuntu-22.04'
@@ -101,7 +101,7 @@ jobs:
 
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          bundle: qw-cat-${{ matrix.arch }}.flatpak
+          bundle: qw-cat-${{ matrix.arch }}-${{ github.event.release.tag_name }}.flatpak
           manifest-path: ./src-tauri/bundle/generated/io.github.neisvestney.qw-cat.yml
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.arch }}
@@ -110,7 +110,7 @@ jobs:
       - name: 'Upload flatpak artifact'
         run: |
           cd ${{ github.workspace }}
-          gh release upload ${{ github.event.release.tag_name }} qw-cat-${{ matrix.arch }}.flatpak
+          gh release upload ${{ github.event.release.tag_name }} qw-cat-${{ matrix.arch }}-${{ github.event.release.tag_name }}.flatpak
         env:
           GITHUB_TOKEN: ${{ github.TOKEN }}
         shell: bash
