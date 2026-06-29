@@ -632,6 +632,9 @@ const VideoView = observer(() => {
                   onChange={(e, newValue) =>
                     appStateStore.currentVideo?.setExportResolution(newValue ?? "")
                   }
+                  onInputChange={(e, newValue) => {
+                    appStateStore.currentVideo?.setExportResolution(newValue ?? "");
+                  }}
                   renderInput={(params) => (
                     <TextField {...params} required fullWidth label="Resolution" />
                   )}
