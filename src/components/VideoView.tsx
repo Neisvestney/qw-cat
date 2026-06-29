@@ -52,6 +52,7 @@ import {AudioStream} from "../stores/VideoEditorStore.ts";
 import {useThrottledCallback} from "use-debounce";
 import {gainToGainValue, useVideoGain} from "../lib/useVideoGain.ts";
 import convertFilePath from "../lib/convertFilePath.ts";
+import {LogsStoreContext} from "../stores/LogsStore.ts";
 
 const ViewContainer = styled("div")(
   ({theme}) => css`
@@ -198,6 +199,7 @@ const NVIDIA_VIDEO_ENCODERS = ["h264_nvenc", "hevc_nvenc", "av1_nvenc"];
 
 const VideoView = observer(() => {
   const appStateStore = useContext(AppStateStoreContext);
+  const logsStore = useContext(LogsStoreContext);
   const videoElementRef = useRef<HTMLVideoElement>(null);
   const videoWrapperElementRef = useRef<HTMLDivElement>(null);
 
@@ -347,7 +349,7 @@ const VideoView = observer(() => {
   }, [appStateStore.currentVideo]);
 
   useEffect(() => {
-    if (exportModalOpen) return;
+    if (exportModalOpen || logsStore.logsWindowOpen) return;
 
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.altKey || e.ctrlKey || e.shiftKey || e.metaKey) return;
@@ -387,7 +389,7 @@ const VideoView = observer(() => {
     window.addEventListener("keydown", handleKeyPress);
 
     return () => window.removeEventListener("keydown", handleKeyPress);
-  }, [appStateStore.currentVideo, exportModalOpen]);
+  }, [appStateStore.currentVideo, exportModalOpen, logsStore.logsWindowOpen]);
 
   if (!appStateStore.currentVideo) return;
 
