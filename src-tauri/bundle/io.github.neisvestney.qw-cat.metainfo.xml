@@ -51,6 +51,16 @@
   </screenshots>
 
   <releases>
+    <release version="0.3.5" date="2026-06-30">
+      <url>https://github.com/Neisvestney/qw-cat/releases/tag/v0.3.5</url>
+
+      <description>
+        <ul>
+          <li>Disable hot keys in VideoView when logs window is shown</li>
+          <li>Fix custom export resolution input handling</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.4" date="2026-01-04">
       <url>https://github.com/Neisvestney/qw-cat/releases/tag/v0.3.4</url>
 

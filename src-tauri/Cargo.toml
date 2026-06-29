@@ -1,6 +1,6 @@
 [package]
 name = "qw-cat"
-version = "0.3.4"
+version = "0.3.5"
 description = "View and trim video"
 authors = ["Neisvestney"]
 license = "MIT"
