@@ -9,6 +9,7 @@ export function gainToGainValue(v: number) {
 export function useVideoGain(
   videoRef: MutableRefObject<HTMLVideoElement | null>,
   audioStream?: AudioStream,
+  volume?: number,
 ) {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
@@ -47,8 +48,8 @@ export function useVideoGain(
   useEffect(() => {
     const gain = audioStream?.active ? gainToGainValue(audioStream.gain) : 0;
     if (!gainNodeRef.current) return;
-    gainNodeRef.current.gain.value = gain;
-  }, [audioStream?.active, audioStream?.gain]);
+    gainNodeRef.current.gain.value = gain * ((volume ?? 100) / 100);
+  }, [audioStream?.active, audioStream?.gain, volume]);
 
   return audioCtxRef;
 }

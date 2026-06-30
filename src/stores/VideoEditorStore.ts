@@ -37,6 +37,8 @@ class VideoEditorStore {
   duration: number | null;
   trimStart: number | null;
   trimEnd: number | null;
+  playbackVolume = 100;
+  playbackMuted = false;
 
   videoState: VideoState = {
     time: 0,
@@ -96,6 +98,28 @@ class VideoEditorStore {
 
   handlePlayFromStart() {
     this.setVideoTime(this.trimStart ?? 0);
+  }
+
+  changePlaybackVolume(volume: number) {
+    this.playbackVolume = volume;
+    this.playbackMuted = false;
+  }
+
+  togglePlaybackMuted() {
+    if (this.playbackVolume == 0) {
+      this.playbackMuted = false;
+      this.playbackVolume = 10;
+    } else {
+      this.playbackMuted = !this.playbackMuted;
+    }
+  }
+
+  get effectivePlaybackVolume() {
+    return this.playbackMuted ? 0 : this.playbackVolume;
+  }
+
+  get effectivePlaybackMuted() {
+    return this.playbackMuted || this.playbackVolume == 0;
   }
 
   updateAudioStreamsFilePaths(audioStreamsFilePaths: AudioStreamFilePath[]) {

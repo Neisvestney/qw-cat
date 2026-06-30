@@ -4,6 +4,7 @@ export function useSyncedMediaTracks(
   audioUrls: string[],
   audionStreamsCount: number,
   gains: number[],
+  volume: number | undefined,
   videoRef: MutableRefObject<HTMLVideoElement | null>,
 ) {
   const ctxRef = useRef<AudioContext | null>(null);
@@ -73,7 +74,7 @@ export function useSyncedMediaTracks(
         buffersRef.current.set(idx, buffer);
 
         const gainNode = ctx.createGain();
-        gainNode.gain.value = initialGains[idx] ?? 1;
+        gainNode.gain.value = (initialGains[idx] ?? 1) * ((volume ?? 100) / 100);
         gainNodesRef.current.set(idx, gainNode);
 
         readyCountsRef.current.loaded += 1;
@@ -97,17 +98,17 @@ export function useSyncedMediaTracks(
       gainNodes.clear();
       sources.clear();
     };
-  }, [audioUrls, videoRef, audionStreamsCount, initialGains, startSourceAt]);
+  }, [audioUrls, videoRef, audionStreamsCount, initialGains, startSourceAt, volume]);
 
   // update gains dynamically
   useEffect(() => {
     gains.forEach((gainValue, idx) => {
       const gainNode = gainNodesRef.current.get(idx);
       if (gainNode) {
-        gainNode.gain.value = gainValue;
+        gainNode.gain.value = gainValue * ((volume ?? 100) / 100);
       }
     });
-  }, [gains]);
+  }, [gains, volume]);
 
   // wire up video events
   useEffect(() => {

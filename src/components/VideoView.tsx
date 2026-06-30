@@ -20,6 +20,8 @@ import {
   InputAdornment,
   InputLabel,
   MenuItem,
+  Paper,
+  Popper,
   Select,
   Slider,
   SliderThumb,
@@ -53,6 +55,8 @@ import {useThrottledCallback} from "use-debounce";
 import {gainToGainValue, useVideoGain} from "../lib/useVideoGain.ts";
 import convertFilePath from "../lib/convertFilePath.ts";
 import {LogsStoreContext} from "../stores/LogsStore.ts";
+import {bindDoubleClick, bindHover, bindPopper, usePopupState} from "material-ui-popup-state/hooks";
+import {VolumeMute} from "mdi-material-ui";
 
 const ViewContainer = styled("div")(
   ({theme}) => css`
@@ -253,10 +257,11 @@ const VideoView = observer(() => {
     audioUrls,
     appStateStore.currentVideo?.audioStreams.length ?? 0,
     audioGains,
+    appStateStore.currentVideo?.effectivePlaybackVolume ?? 100,
     videoElementRef,
   );
 
-  const audioCtx = useVideoGain(videoElementRef, appStateStore.currentVideo?.defaultAudioStream);
+  const audioCtx = useVideoGain(videoElementRef, appStateStore.currentVideo?.defaultAudioStream, appStateStore.currentVideo?.effectivePlaybackVolume);
 
   useEffect(() => {
     if (backConfirmation) {
@@ -760,6 +765,9 @@ const TimelineWithControls = observer(() => {
         )}
       </Box>
       <Box sx={{marginBottom: "2px"}}>
+        <PlaybackVolumeControl/>
+      </Box>
+      <Box sx={{marginBottom: "2px"}}>
         <IconButton onClick={appStateStore.currentVideo?.toggleVideoFullscreen}>
           {appStateStore.currentVideo.videoState.fullscreen ? (
             <FullscreenExitIcon />
@@ -769,6 +777,60 @@ const TimelineWithControls = observer(() => {
         </IconButton>
       </Box>
     </Box>
+  );
+});
+
+const PlaybackVolumeControl = observer(() => {
+  const appStateStore = useContext(AppStateStoreContext);
+
+  if (!appStateStore.currentVideo) return null;
+
+  const popupState = usePopupState({
+    variant: "popper",
+    popupId: "demoPopper",
+  });
+
+  const handleWheel = (event: React.WheelEvent<HTMLDivElement>): void => {
+    const direction = event.deltaY < 0 ? 1 : -1;
+
+    const newValue = (appStateStore.currentVideo?.playbackVolume ?? 0) + direction * 5;
+    appStateStore.currentVideo?.changePlaybackVolume(Math.max(0, Math.min(100, newValue)));
+  };
+
+  return (
+    <div>
+      <IconButton
+        {...bindHover(popupState)}
+        onClick={() => appStateStore.currentVideo?.togglePlaybackMuted()}
+      >
+        {appStateStore.currentVideo.effectivePlaybackMuted ? (
+          <VolumeMute />
+        ) : appStateStore.currentVideo.effectivePlaybackVolume < 50 ? (
+          <VolumeDown />
+        ) : (
+          <VolumeUp />
+        )}
+      </IconButton>
+      <Popper
+        {...bindPopper(popupState)}
+        disablePortal
+        placement="top"
+        sx={{zIndex: 2147483647}}
+      >
+        <Box sx={{padding: 3, pb: 1}} onWheel={handleWheel}>
+          <Paper sx={{borderRadius: 2, pt: "16px", pb: "12px", pl: "1px", pr: "1px"}}>
+            <Slider
+              value={appStateStore.currentVideo.playbackVolume}
+              onChange={(e, v) => appStateStore.currentVideo?.changePlaybackVolume(v)}
+              color={appStateStore.currentVideo.effectivePlaybackMuted ? "secondary" : undefined}
+              sx={{height: 150}}
+              orientation="vertical"
+              valueLabelDisplay="auto"
+            />
+          </Paper>
+        </Box>
+      </Popper>
+    </div>
   );
 });
 
