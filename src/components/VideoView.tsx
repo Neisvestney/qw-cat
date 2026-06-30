@@ -261,7 +261,11 @@ const VideoView = observer(() => {
     videoElementRef,
   );
 
-  const audioCtx = useVideoGain(videoElementRef, appStateStore.currentVideo?.defaultAudioStream, appStateStore.currentVideo?.effectivePlaybackVolume);
+  const audioCtx = useVideoGain(
+    videoElementRef,
+    appStateStore.currentVideo?.defaultAudioStream,
+    appStateStore.currentVideo?.effectivePlaybackVolume,
+  );
 
   useEffect(() => {
     if (backConfirmation) {
@@ -765,7 +769,7 @@ const TimelineWithControls = observer(() => {
         )}
       </Box>
       <Box sx={{marginBottom: "2px"}}>
-        <PlaybackVolumeControl/>
+        <PlaybackVolumeControl />
       </Box>
       <Box sx={{marginBottom: "2px"}}>
         <IconButton onClick={appStateStore.currentVideo?.toggleVideoFullscreen}>
@@ -811,12 +815,7 @@ const PlaybackVolumeControl = observer(() => {
           <VolumeUp />
         )}
       </IconButton>
-      <Popper
-        {...bindPopper(popupState)}
-        disablePortal
-        placement="top"
-        sx={{zIndex: 2147483647}}
-      >
+      <Popper {...bindPopper(popupState)} disablePortal placement="top" sx={{zIndex: 2147483647}}>
         <Box sx={{padding: 3, pb: 1}} onWheel={handleWheel}>
           <Paper sx={{borderRadius: 2, pt: "16px", pb: "12px", pl: "1px", pr: "1px"}}>
             <Slider
