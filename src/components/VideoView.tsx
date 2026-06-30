@@ -57,6 +57,7 @@ import convertFilePath from "../lib/convertFilePath.ts";
 import {LogsStoreContext} from "../stores/LogsStore.ts";
 import {bindHover, bindPopper, usePopupState} from "material-ui-popup-state/hooks";
 import {VolumeMute} from "mdi-material-ui";
+import {VolumeDownAlt} from "@mui/icons-material";
 
 const ViewContainer = styled("div")(
   ({theme}) => css`
@@ -810,14 +811,14 @@ const PlaybackVolumeControl = observer(() => {
         {appStateStore.currentVideo.effectivePlaybackMuted ? (
           <VolumeMute />
         ) : appStateStore.currentVideo.effectivePlaybackVolume < 50 ? (
-          <VolumeDown />
+          <VolumeDownAlt />
         ) : (
           <VolumeUp />
         )}
       </IconButton>
       <Popper {...bindPopper(popupState)} disablePortal placement="top" sx={{zIndex: 2147483647}}>
         <Box sx={{padding: 3, pb: 1}} onWheel={handleWheel}>
-          <Paper sx={{borderRadius: 2, pt: "16px", pb: "12px", pl: "1px", pr: "1px"}}>
+          <Paper sx={{borderRadius: 2, pt: "18px", pb: "12px", pl: "1px", pr: "1px"}}>
             <Slider
               value={appStateStore.currentVideo.playbackVolume}
               onChange={(e, v) => appStateStore.currentVideo?.changePlaybackVolume(v)}
