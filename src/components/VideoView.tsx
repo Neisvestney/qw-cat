@@ -55,7 +55,7 @@ import {useThrottledCallback} from "use-debounce";
 import {gainToGainValue, useVideoGain} from "../lib/useVideoGain.ts";
 import convertFilePath from "../lib/convertFilePath.ts";
 import {LogsStoreContext} from "../stores/LogsStore.ts";
-import {bindDoubleClick, bindHover, bindPopper, usePopupState} from "material-ui-popup-state/hooks";
+import {bindHover, bindPopper, usePopupState} from "material-ui-popup-state/hooks";
 import {VolumeMute} from "mdi-material-ui";
 
 const ViewContainer = styled("div")(
