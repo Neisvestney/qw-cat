@@ -36,7 +36,6 @@ import format from "format-duration";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import {autorun} from "mobx";
-import {useSyncedMediaTracks} from "../lib/useSyncedMediaTracks.ts";
 import FolderIcon from "@mui/icons-material/Folder";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import PauseIcon from "@mui/icons-material/Pause";
@@ -52,7 +51,7 @@ import VolumeUp from "@mui/icons-material/VolumeUp";
 import CancelIcon from "@mui/icons-material/Cancel";
 import {AudioStream} from "../stores/VideoEditorStore.ts";
 import {useThrottledCallback} from "use-debounce";
-import {gainToGainValue, useVideoGain} from "../lib/useVideoGain.ts";
+import {gainToGainValue, useAudioMixer} from "../lib/useAudioMixer.ts";
 import convertFilePath from "../lib/convertFilePath.ts";
 import {LogsStoreContext} from "../stores/LogsStore.ts";
 import {bindHover, bindPopper, usePopupState} from "material-ui-popup-state/hooks";
@@ -211,62 +210,24 @@ const VideoView = observer(() => {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [backConfirmation, setBackConfirmation] = useState(false);
 
-  // const audioUrls = useMemo(
-  //   () => (appStateStore.currentVideo?.audioStreams ?? []).filter(x => x.path).map(x => convertFileSrc(x.path!)),
-  //   [toJS(appStateStore.currentVideo?.audioStreams.map(x => x.path))]
-  // )
-  // const audioGains = useMemo(
-  //   () => (appStateStore.currentVideo?.audioStreams ?? []).map(x => x.active ? x.gain : 0),
-  //   [toJS(appStateStore.currentVideo?.audioStreams)]
-  // )
+  const audioCtx = useAudioMixer(videoElementRef, () => {
+    const video = appStateStore.currentVideo;
+    if (!video) return null;
 
-  const [audioUrls, setAudioUrls] = useState<string[]>([]);
-  const [audioGains, setAudioGains] = useState<number[]>([]);
-  const audioGainsThrottled = useThrottledCallback((value: number[]) => {
-    setAudioGains(value);
-  }, 100);
-  useEffect(() => {
-    const dispose1 = autorun(() => {
-      if (!appStateStore.currentVideo) return;
-
-      const a = appStateStore.currentVideo.audioStreams
-        .filter((x) => x.streamIndex != appStateStore.currentVideo!.defaultAudioStreamIndex)
-        .filter((x) => x.path)
-        .map((x) => convertFilePath(x.path!, appStateStore.integratedServerStatus?.port));
-
-      setAudioUrls(a);
-    });
-
-    const dispose2 = autorun(() => {
-      if (!appStateStore.currentVideo) return;
-
-      const a = appStateStore.currentVideo.audioStreams
-        .filter((x) => x.streamIndex != appStateStore.currentVideo!.defaultAudioStreamIndex)
-        .map((x) => (x.active ? gainToGainValue(x.gain) : 0));
-
-      audioGainsThrottled(a);
-    });
-
-    return () => {
-      dispose1();
-      dispose2();
+    const toGain = (x: AudioStream) => (x.active ? gainToGainValue(x.gain) : 0);
+    const defaultStream = video.defaultAudioStream as AudioStream | undefined;
+    return {
+      volume: video.effectivePlaybackVolume / 100,
+      defaultGain: defaultStream ? toGain(defaultStream) : 0,
+      tracks: video.audioStreams
+        .filter((x) => x.streamIndex != defaultStream?.streamIndex)
+        .map((x) => ({
+          streamIndex: x.streamIndex,
+          url: convertFilePath(x.path ?? undefined, appStateStore.integratedServerStatus?.port),
+          gain: toGain(x),
+        })),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audioGainsThrottled]);
-
-  useSyncedMediaTracks(
-    audioUrls,
-    appStateStore.currentVideo?.audioStreams.length ?? 0,
-    audioGains,
-    appStateStore.currentVideo?.effectivePlaybackVolume ?? 100,
-    videoElementRef,
-  );
-
-  const audioCtx = useVideoGain(
-    videoElementRef,
-    appStateStore.currentVideo?.defaultAudioStream,
-    appStateStore.currentVideo?.effectivePlaybackVolume,
-  );
+  });
 
   useEffect(() => {
     if (backConfirmation) {
@@ -431,7 +392,7 @@ const VideoView = observer(() => {
   };
 
   const handleBackClicked = () => {
-    audioCtx.current?.resume();
+    audioCtx.current?.resume().catch(() => undefined);
     if (!backConfirmation) {
       setBackConfirmation(true);
       return;
@@ -458,8 +419,6 @@ const VideoView = observer(() => {
       appStateStore.currentVideo?.setExportPath(path);
     }
   };
-
-  console.log("VideoView rendered!");
 
   return (
     <ViewContainer>

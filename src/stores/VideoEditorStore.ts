@@ -5,7 +5,7 @@ import addPostfixToFilename from "../lib/addPostfixToFilename.ts";
 import replaceExtension from "../lib/replaceExtension.ts";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
 import {ffmpegExport, GpuAcceleration} from "../generated";
-import {gainToGainValue} from "../lib/useVideoGain.ts";
+import {gainToGainValue} from "../lib/useAudioMixer.ts";
 import convertFilePath from "../lib/convertFilePath.ts";
 import AppStateStore from "./AppStateStore.ts";
 
