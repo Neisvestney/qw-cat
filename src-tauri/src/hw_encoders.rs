@@ -11,11 +11,13 @@ pub struct HwEncoders {
     pub ffmpeg_installed: bool,
 }
 
-// Grouped by vendor: vendors are probed in parallel, encoders of one vendor one by one to stay under NVENC session limits
-const HW_ENCODERS: [&[&str]; 3] = [
+// Grouped by vendor: vendors are probed in parallel, encoders of one vendor one by one to stay under NVENC session limits.
+// The last group holds CPU encoders that some ffmpeg builds leave out
+const HW_ENCODERS: [&[&str]; 4] = [
     &["h264_nvenc", "hevc_nvenc", "av1_nvenc"],
     &["h264_amf", "hevc_amf", "av1_amf"],
     &["h264_qsv", "hevc_qsv", "av1_qsv", "vp9_qsv"],
+    &["libsvtav1", "libwebp_anim"],
 ];
 
 // The bundled ffmpeg lists every hardware encoder in `-encoders`, so only a real encode proves the GPU and driver work

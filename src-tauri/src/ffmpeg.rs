@@ -11,7 +11,6 @@ use ffmpeg_sidecar::command::FfmpegCommand;
 use ffmpeg_sidecar::event::{FfmpegEvent, FfmpegProgress, LogLevel};
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
 use std::io::Write;
 use std::process::ChildStdin;
 use std::sync::Arc;
@@ -183,6 +182,17 @@ fn get_audio_file_path(video_file_path: &str, audio_stream_index: i32, format: &
     tmp_folder.join(audio_file_name).to_string_lossy().to_string()
 }
 
+// Pinned to 8-bit 4:2:0, otherwise 10-bit sources give High 10 / 10-bit streams that browsers and Discord can't play
+fn output_pix_fmt(video_codec: Option<&str>) -> Option<&'static str> {
+    match video_codec {
+        Some("prores_ks") => Some("yuv422p10le"),
+        // paletteuse already outputs pal8
+        Some("gif") => None,
+        Some(codec) if codec.ends_with("_nvenc") || codec.ends_with("_amf") || codec.ends_with("_qsv") => Some("nv12"),
+        _ => Some("yuv420p"),
+    }
+}
+
 #[allow(clippy::manual_async_fn)] // Recursive async function (Send is not auto implements)
 fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output = ()> + Send {
     async move {
@@ -322,12 +332,11 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             match options.gpu_acceleration {
                                 Some(GpuAcceleration::Nvidia) => {
                                     let nvidia_gpu_args = "-hwaccel cuda -hwaccel_output_format cuda";
-                                    let gpu_scale_arg = "scale_cuda";
 
                                     match &input_video_codec.as_deref() {
-                                        Some("h264") => Some((nvidia_gpu_args, "h264_cuvid", gpu_scale_arg)),
-                                        Some("hevc") => Some((nvidia_gpu_args, "hevc_cuvid", gpu_scale_arg)),
-                                        Some("av1") => Some((nvidia_gpu_args, "av1_cuvid", gpu_scale_arg)),
+                                        Some("h264") => Some((nvidia_gpu_args, "h264_cuvid")),
+                                        Some("hevc") => Some((nvidia_gpu_args, "hevc_cuvid")),
+                                        Some("av1") => Some((nvidia_gpu_args, "av1_cuvid")),
                                         _ => None,
                                     }
                                 }
@@ -336,14 +345,28 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             }
                         };
 
-                        let scale = if let Some(resolution) = options.resolution {
-                            let scale_filter = gpu_acceleration.map(|(_, _, scale_filter)| scale_filter).unwrap_or("scale");
-                            Cow::Owned(format!(",{}={}", scale_filter, resolution))
-                        } else {
-                            Cow::Borrowed("")
-                        };
+                        let video_codec = options.video_codec.as_deref();
+                        let has_audio = !matches!(video_codec, Some("gif" | "libwebp_anim"));
 
-                        let video_filter = format!("[0:v]setpts=PTS-STARTPTS{}[v]", scale);
+                        let mut video_filter = String::from("[0:v]setpts=PTS-STARTPTS");
+                        if gpu_acceleration.is_some() {
+                            // Frames stay in CUDA memory where -pix_fmt can't reach, so scale_cuda does the 8-bit conversion
+                            match &options.resolution {
+                                Some(resolution) => video_filter.push_str(&format!(",scale_cuda={resolution}:format=nv12")),
+                                None => video_filter.push_str(",scale_cuda=format=nv12"),
+                            }
+                        } else if let Some(resolution) = &options.resolution {
+                            video_filter.push_str(&format!(",scale={resolution}"));
+                        }
+                        if video_codec == Some("gif") {
+                            if let Some(frame_rate) = options.frame_rate {
+                                video_filter.push_str(&format!(",fps={frame_rate}"));
+                            }
+                            video_filter.push_str(
+                                ",split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle",
+                            );
+                        }
+                        video_filter.push_str("[v]");
 
                         let audio_filter = if !options.active_audio_streams.is_empty() {
                             let audio_streams_trim = options
@@ -373,7 +396,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
 
                         let mut ffmpeg_command = FfmpegCommand::new_with_path(ffmpeg_path());
 
-                        if let Some((args, codec, _)) = gpu_acceleration {
+                        if let Some((args, codec)) = gpu_acceleration {
                             ffmpeg_command.args(args.split_whitespace());
                             ffmpeg_command.codec_video(codec);
                         }
@@ -381,30 +404,45 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                         ffmpeg_command.seek(options.start_time.to_string().as_str());
                         ffmpeg_command.to(options.end_time.to_string().as_str());
 
-                        ffmpeg_command
-                            .input(&options.input_path)
-                            .overwrite()
-                            .filter_complex(format!("{};{}", video_filter, audio_filter))
-                            //.filter_complex(format!("\"{}\"", audio_filter))
-                            .map("[v]")
-                            .map("[a]");
+                        ffmpeg_command.input(&options.input_path).overwrite();
+                        if has_audio {
+                            ffmpeg_command
+                                .filter_complex(format!("{};{}", video_filter, audio_filter))
+                                .map("[v]")
+                                .map("[a]");
+                        } else {
+                            ffmpeg_command.filter_complex(video_filter).map("[v]");
+                        }
 
-                        if let Some(codec) = &options.video_codec {
+                        if let Some(codec) = video_codec {
                             ffmpeg_command.codec_video(codec);
                         }
 
-                        if let Some(bitrate) = options.bitrate {
-                            ffmpeg_command.args(vec!["-b:v", &bitrate]);
+                        if gpu_acceleration.is_none()
+                            && let Some(pix_fmt) = output_pix_fmt(video_codec)
+                        {
+                            ffmpeg_command.pix_fmt(pix_fmt);
                         }
 
-                        if let Some(frame_rate) = options.frame_rate {
+                        if let Some(bitrate) = &options.bitrate {
+                            ffmpeg_command.args(vec!["-b:v", bitrate]);
+                        } else if video_codec == Some("libvpx-vp9") {
+                            // Without a target libvpx falls back to ~256 kbit/s, so switch to constant quality
+                            ffmpeg_command.args(["-crf", "32", "-b:v", "0"]);
+                        }
+
+                        // GIF already got its rate from the fps filter before the palette was built
+                        if video_codec != Some("gif")
+                            && let Some(frame_rate) = options.frame_rate
+                        {
                             ffmpeg_command.arg("-r");
                             ffmpeg_command.arg(frame_rate.to_string().as_str());
                         }
 
                         // Encoder families name their speed presets differently, and libvpx/AMF have no -preset at all
-                        let encoder_preset = match options.video_codec.as_deref() {
+                        let encoder_preset = match video_codec {
                             None | Some("libx264" | "libx265") => Some("medium"),
+                            Some("libsvtav1") => Some("8"),
                             Some(codec) if codec.ends_with("_nvenc") => Some("p4"),
                             Some(codec) if codec.ends_with("_qsv") => Some("medium"),
                             _ => None,
@@ -413,13 +451,36 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             ffmpeg_command.preset(encoder_preset);
                         }
 
-                        // Apple players only open HEVC in MP4/MOV when it is tagged hvc1 instead of ffmpeg's default hev1
-                        let is_hevc = matches!(options.video_codec.as_deref(), Some(codec) if codec == "libx265" || codec.starts_with("hevc_"));
+                        match video_codec {
+                            // libvpx defaults to single-threaded "best" quality, which takes ages
+                            Some("libvpx-vp9") => {
+                                ffmpeg_command.args(["-row-mt", "1", "-deadline", "good", "-cpu-used", "4"]);
+                            }
+                            // 422 HQ, tagged as Apple's own encoder so editors don't warn about it
+                            Some("prores_ks") => {
+                                ffmpeg_command.args(["-profile:v", "3", "-vendor", "apl0"]);
+                            }
+                            // The webp muxer plays once by default, unlike gif
+                            Some("libwebp_anim") => {
+                                ffmpeg_command.args(["-loop", "0"]);
+                            }
+                            _ => {}
+                        }
+
                         let output_extension = std::path::Path::new(&options.output_path)
                             .extension()
                             .map(|e| e.to_string_lossy().to_lowercase());
-                        if is_hevc && matches!(output_extension.as_deref(), Some("mp4" | "mov" | "m4v")) {
+                        let is_mp4_family = matches!(output_extension.as_deref(), Some("mp4" | "mov" | "m4v"));
+
+                        // Apple players only open HEVC in MP4/MOV when it is tagged hvc1 instead of ffmpeg's default hev1
+                        let is_hevc = matches!(video_codec, Some(codec) if codec == "libx265" || codec.starts_with("hevc_"));
+                        if is_hevc && is_mp4_family {
                             ffmpeg_command.args(["-tag:v", "hvc1"]);
+                        }
+
+                        // Moves the index to the front so browsers and messengers start playing before the download ends
+                        if is_mp4_family {
+                            ffmpeg_command.args(["-movflags", "+faststart"]);
                         }
 
                         ffmpeg_command.output(&options.output_path);

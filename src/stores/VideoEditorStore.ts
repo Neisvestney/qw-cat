@@ -14,10 +14,13 @@ import {
   encoderVendor,
   ExportPreset,
   ExportPresetId,
+  firstCompatibleContainer,
+  hasAudio,
   isContainerCompatible,
   MAX_BITRATE_KBPS,
   resolvePresetCodec,
   scaledResolution,
+  supportsBitrate,
 } from "../lib/exportPresets.ts";
 
 export interface AudioStream {
@@ -204,11 +207,15 @@ class VideoEditorStore {
     return (this.trimEnd ?? 0) - (this.trimStart ?? 0);
   }
 
+  get audioBitrateKbps() {
+    return hasAudio(this.exportVideoEncoder) ? AUDIO_BITRATE_KBPS : 0;
+  }
+
   get rawTargetSizeBitrateKbps() {
     if (this.exportTargetSizeMb == null || this.trimDurationSeconds <= 0) return null;
     // 5% margin because single-pass encoders overshoot the requested bitrate
     const totalKbps = (this.exportTargetSizeMb * 0.95 * 8 * 1024) / this.trimDurationSeconds;
-    return Math.floor(totalKbps - AUDIO_BITRATE_KBPS);
+    return Math.floor(totalKbps - this.audioBitrateKbps);
   }
 
   get targetSizeBitrateKbps() {
@@ -232,7 +239,7 @@ class VideoEditorStore {
   get estimatedVideoSizeMb() {
     if (this.effectiveBitrateKbps == null) return null;
     return estimateVideoSize(
-      this.effectiveBitrateKbps + AUDIO_BITRATE_KBPS,
+      this.effectiveBitrateKbps + this.audioBitrateKbps,
       this.trimDurationSeconds,
     );
   }
@@ -265,7 +272,7 @@ class VideoEditorStore {
     this.exportResolution = preset.shortSide
       ? scaledResolution(this.sourceVideo, preset.shortSide)
       : null;
-    this.exportFrameRate = null;
+    this.exportFrameRate = preset.frameRate;
     this.exportBitrateKbps = preset.bitrateKbps;
     this.exportTargetSizeMb = preset.targetSizeMb;
   }
@@ -311,7 +318,12 @@ class VideoEditorStore {
     this.exportVideoEncoder = codec;
     const vendor = encoderVendor(codec);
     this.exportGpuAcceleration = vendor == "cpu" ? null : vendor;
-    if (!isContainerCompatible(this.exportFormat, codec)) this.setExportFormat("mp4");
+    if (!supportsBitrate(codec)) {
+      this.exportBitrateKbps = null;
+      this.exportTargetSizeMb = null;
+    }
+    if (!isContainerCompatible(this.exportFormat, codec))
+      this.setExportFormat(firstCompatibleContainer(codec));
   }
 
   async exportVideo() {

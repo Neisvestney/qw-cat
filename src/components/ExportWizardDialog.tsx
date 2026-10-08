@@ -35,6 +35,10 @@ import ForumIcon from "@mui/icons-material/Forum";
 import HighQualityIcon from "@mui/icons-material/HighQuality";
 import LanguageIcon from "@mui/icons-material/Language";
 import BoltIcon from "@mui/icons-material/Bolt";
+import SendIcon from "@mui/icons-material/Send";
+import CompressIcon from "@mui/icons-material/Compress";
+import MovieEditIcon from "@mui/icons-material/MovieEdit";
+import GifBoxIcon from "@mui/icons-material/GifBox";
 import TuneIcon from "@mui/icons-material/Tune";
 import LinkIcon from "@mui/icons-material/Link";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
@@ -52,6 +56,8 @@ import {
   EXPORT_PRESETS,
   ExportPresetId,
   findExportPreset,
+  hasAudio,
+  hasGpuEncoder,
   heightForWidth,
   isCodecAvailable,
   isContainerCompatible,
@@ -60,6 +66,7 @@ import {
   scaledResolution,
   STANDARD_FRAME_RATES,
   STANDARD_SHORT_SIDES,
+  supportsBitrate,
   MAX_BITRATE_KBPS,
   MAX_TARGET_SIZE_MB,
   TARGET_SIZE_CHIPS_MB,
@@ -78,14 +85,20 @@ const VIDEO_FORMATS = [
   "mkv",
   "mpg",
   "mpeg",
+  "gif",
+  "webp",
 ];
 
 const STEPS = ["Purpose", "Video", "Audio & save"];
 
 const PRESET_ICONS: Record<ExportPresetId | "custom", React.ReactNode> = {
   discord: <ForumIcon color="primary" />,
+  messenger: <SendIcon color="primary" />,
   hq: <HighQualityIcon color="primary" />,
+  small: <CompressIcon color="primary" />,
   web: <LanguageIcon color="primary" />,
+  editing: <MovieEditIcon color="primary" />,
+  gif: <GifBoxIcon color="primary" />,
   fast: <BoltIcon color="primary" />,
   custom: <TuneIcon color="primary" />,
 };
@@ -285,7 +298,7 @@ const PurposeStep = observer(
     const appStateStore = useContext(AppStateStoreContext);
     const hwEncoders = appStateStore.hwEncoders ?? [];
     const preferGpu = appStateStore.preferGpuEncoding;
-    const hasGpu = hwEncoders.length > 0;
+    const hasGpu = hasGpuEncoder(hwEncoders);
 
     const handlePreferGpuChange = (checked: boolean) => {
       appStateStore.setPreferGpuEncoding(checked);
@@ -299,7 +312,7 @@ const PurposeStep = observer(
           <CardGrid minWidth={200}>
             {EXPORT_PRESETS.map((preset) => {
               const codec = resolvePresetCodec(preset, hwEncoders, preferGpu);
-              const detecting = appStateStore.hwEncoders == null && preset.gpu == "required";
+              const detecting = appStateStore.hwEncoders == null;
               return (
                 <OptionCard
                   key={preset.id}
@@ -309,8 +322,10 @@ const PurposeStep = observer(
                     codec
                       ? preset.description
                       : detecting
-                        ? "Detecting GPU…"
-                        : "Needs an NVIDIA, AMD or Intel GPU"
+                        ? "Detecting encoders…"
+                        : preset.gpu == "required"
+                          ? "Needs an NVIDIA, AMD or Intel GPU"
+                          : "Not supported by this FFmpeg build"
                   }
                   details={codec ? `${codecShortLabel(codec)} · ${preset.details}` : undefined}
                   selected={video.exportPreset == preset.id}
@@ -428,7 +443,13 @@ const VideoStep = observer(({video}: {video: VideoEditorStore}) => {
               <OptionCard
                 key={c}
                 title={codecLabel(c)}
-                description={available ? codecDescription(c) : "Not supported by this GPU"}
+                description={
+                  available
+                    ? codecDescription(c)
+                    : vendor == "cpu"
+                      ? "Not in this FFmpeg build"
+                      : "Not supported by this GPU"
+                }
                 details={c}
                 selected={codec == c}
                 disabled={!available}
@@ -486,7 +507,7 @@ const VideoStep = observer(({video}: {video: VideoEditorStore}) => {
           </ToggleButtonGroup>
         </Section>
       </Box>
-      <BitrateSection video={video} onEdit={edit} />
+      {supportsBitrate(codec) && <BitrateSection video={video} onEdit={edit} />}
     </Stack>
   );
 });
@@ -830,23 +851,29 @@ const SaveStep = observer(
     return (
       <Stack spacing={2.5}>
         <Section label="Audio tracks">
-          {video.audioStreams.length == 0 && (
+          {!hasAudio(codec) && (
+            <Typography variant="body2" color="text.secondary">
+              {codecLabel(codec ?? "")} has no sound, audio tracks are skipped.
+            </Typography>
+          )}
+          {hasAudio(codec) && video.audioStreams.length == 0 && (
             <Typography variant="body2" color="text.secondary">
               This video has no audio tracks.
             </Typography>
           )}
-          {video.audioStreams.map((audioStream, index) => (
-            <FormControlLabel
-              key={audioStream.streamIndex}
-              control={
-                <Switch
-                  checked={audioStream.active}
-                  onChange={() => video.toggleAudioStream(audioStream.streamIndex)}
-                />
-              }
-              label={`Audio stream #${index + 1}`}
-            />
-          ))}
+          {hasAudio(codec) &&
+            video.audioStreams.map((audioStream, index) => (
+              <FormControlLabel
+                key={audioStream.streamIndex}
+                control={
+                  <Switch
+                    checked={audioStream.active}
+                    onChange={() => video.toggleAudioStream(audioStream.streamIndex)}
+                  />
+                }
+                label={`Audio stream #${index + 1}`}
+              />
+            ))}
         </Section>
         <Section label="Save to">
           <TextField
