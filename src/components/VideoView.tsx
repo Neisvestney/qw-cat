@@ -754,7 +754,7 @@ const PlaybackVolumeControl = observer(() => {
     popupId: "demoPopper",
   });
 
-  const handleWheel = (event: React.WheelEvent<HTMLDivElement>): void => {
+  const handleWheel = (event: React.WheelEvent<HTMLElement>): void => {
     const direction = event.deltaY < 0 ? 1 : -1;
 
     const newValue = (appStateStore.currentVideo?.playbackVolume ?? 0) + direction * 5;
@@ -766,6 +766,8 @@ const PlaybackVolumeControl = observer(() => {
       <IconButton
         {...bindHover(popupState)}
         onClick={() => appStateStore.currentVideo?.togglePlaybackMuted()}
+        onWheel={handleWheel}
+        sx={{zIndex: appStateStore.currentVideo.videoState.fullscreen ? 2147483648 : 1}}
       >
         {appStateStore.currentVideo.effectivePlaybackMuted ? (
           <VolumeMute />
@@ -775,8 +777,13 @@ const PlaybackVolumeControl = observer(() => {
           <VolumeUp />
         )}
       </IconButton>
-      <Popper {...bindPopper(popupState)} disablePortal placement="top" sx={{zIndex: 2147483647}}>
-        <Box sx={{padding: 3, pb: 1}} onWheel={handleWheel}>
+      <Popper
+        {...bindPopper(popupState)}
+        disablePortal
+        placement="top"
+        sx={{zIndex: appStateStore.currentVideo.videoState.fullscreen ? 2147483647 : undefined}}
+      >
+        <Box sx={{padding: 3, pb: "26px", transform: "translateY(20px)"}} onWheel={handleWheel}>
           <Paper sx={{borderRadius: 2, pt: "18px", pb: "12px", pl: "1px", pr: "1px"}}>
             <Slider
               value={appStateStore.currentVideo.playbackVolume}
