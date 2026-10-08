@@ -117,7 +117,9 @@ pub async fn start_integrated_server(app_handle: AppHandle, state: IntegratedSer
         .layer(ServiceBuilder::new().layer(cors).layer(middleware::from_fn_with_state(port, check_host)));
 
     let token = state.token.to_string();
-    app_handle.emit("integrated-server-started", IntegratedServerStarted { port, token }).unwrap();
+    app_handle
+        .emit("integrated-server-started", IntegratedServerStarted { port, token })
+        .unwrap();
     state.port.write().await.replace(port);
 
     // Default span records the full URI, which would leak the token into logs
@@ -195,5 +197,8 @@ pub async fn get_integrated_server_state(app_handle: AppHandle) -> Option<Integr
     let state = app_handle.state::<IntegratedServerState>();
     let port = *state.port.read().await;
 
-    port.map(|port| IntegratedServerStarted { port, token: state.token.to_string() })
+    port.map(|port| IntegratedServerStarted {
+        port,
+        token: state.token.to_string(),
+    })
 }
