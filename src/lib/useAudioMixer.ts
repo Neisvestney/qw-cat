@@ -49,7 +49,11 @@ function getVideoGraph(video: HTMLVideoElement) {
     const ctx = new AudioContext();
     const master = ctx.createGain();
     const defaultGain = ctx.createGain();
-    ctx.createMediaElementSource(video).connect(defaultGain).connect(master).connect(ctx.destination);
+    ctx
+      .createMediaElementSource(video)
+      .connect(defaultGain)
+      .connect(master)
+      .connect(ctx.destination);
     graph = {ctx, master, defaultGain};
     videoGraphs.set(video, graph);
   }
@@ -69,7 +73,12 @@ function setGain(ctx: AudioContext, node: GainNode, value: number) {
 function syncTrack(video: HTMLVideoElement, track: TrackNode, hard: boolean) {
   const {audio} = track;
 
-  if (video.paused || video.seeking || video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA || !track.enabled) {
+  if (
+    video.paused ||
+    video.seeking ||
+    video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA ||
+    !track.enabled
+  ) {
     if (!audio.paused) audio.pause();
     return;
   }
@@ -86,7 +95,10 @@ function syncTrack(video: HTMLVideoElement, track: TrackNode, hard: boolean) {
 
   const diff = audio.currentTime - video.currentTime;
   const absDiff = Math.abs(diff);
-  if (absDiff > HARD_SYNC_THRESHOLD || ((hard || audio.paused) && absDiff > FORCED_SEEK_THRESHOLD)) {
+  if (
+    absDiff > HARD_SYNC_THRESHOLD ||
+    ((hard || audio.paused) && absDiff > FORCED_SEEK_THRESHOLD)
+  ) {
     audio.currentTime = video.currentTime;
     audio.playbackRate = video.playbackRate;
   } else if (absDiff > SOFT_SYNC_THRESHOLD) {
