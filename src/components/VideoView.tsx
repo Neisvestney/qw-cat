@@ -2,32 +2,21 @@ import {observer} from "mobx-react-lite";
 import React, {ChangeEvent, CSSProperties, useContext, useEffect, useRef, useState} from "react";
 import {AppStateStoreContext} from "../stores/AppStateStore.ts";
 import {
-  Autocomplete,
   Box,
   Button,
   Checkbox,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
   FormControlLabel,
   FormGroup,
-  Grid,
   IconButton,
   Input,
   InputAdornment,
-  InputLabel,
-  MenuItem,
   Paper,
   Popper,
-  Select,
   Slider,
   SliderThumb,
   Stack,
   styled,
-  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -36,15 +25,12 @@ import format from "format-duration";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import {autorun} from "mobx";
-import FolderIcon from "@mui/icons-material/Folder";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import PauseIcon from "@mui/icons-material/Pause";
 import PlayCircleIcon from "@mui/icons-material/PlayCircle";
 import PauseCircleIcon from "@mui/icons-material/PauseCircle";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
-import {save} from "@tauri-apps/plugin-dialog";
-import {GpuAcceleration} from "../generated";
 import ReplayIcon from "@mui/icons-material/Replay";
 import VolumeDown from "@mui/icons-material/VolumeDown";
 import VolumeUp from "@mui/icons-material/VolumeUp";
@@ -54,6 +40,7 @@ import {useThrottledCallback} from "use-debounce";
 import {gainToGainValue, useAudioMixer} from "../lib/useAudioMixer.ts";
 import convertFilePath from "../lib/convertFilePath.ts";
 import {LogsStoreContext} from "../stores/LogsStore.ts";
+import ExportWizardDialog from "./ExportWizardDialog.tsx";
 import {bindHover, bindPopper, usePopupState} from "material-ui-popup-state/hooks";
 import {VolumeMute} from "mdi-material-ui";
 import {VolumeDownAlt} from "@mui/icons-material";
@@ -172,34 +159,6 @@ const AdditionalButtons = styled("div")(
 function valuetext(value: number) {
   return format(value * 1000, {ms: true});
 }
-
-const VIDEO_FORMATS = [
-  "mp4",
-  "m4v",
-  "mov",
-  "avi",
-  "wmv",
-  "flv",
-  "f4v",
-  "webm",
-  "mkv",
-  "mpg",
-  "mpeg",
-];
-const VIDEO_RESOLUTIONS = ["720x480", "1080x720", "1920x1080", "2560x1440", "3840x2160"];
-const VIDEO_ENCODERS = [
-  "libx264", // H.264 (very common for web and general use)
-  "libx265", // H.265 / HEVC (more efficient than H.264)
-  "libvpx", // VP8 (used in WebM)
-  "libvpx-vp9", // VP9 (higher efficiency than VP8)
-  "mpeg4", // MPEG-4 Part 2
-  "h263", // H.263
-  "libtheora", // Theora (used in Ogg)
-  "prores", // Apple ProRes
-  "dnxhd", // Avid DNxHD
-];
-
-const NVIDIA_VIDEO_ENCODERS = ["h264_nvenc", "hevc_nvenc", "av1_nvenc"];
 
 const VideoView = observer(() => {
   const appStateStore = useContext(AppStateStoreContext);
@@ -385,12 +344,6 @@ const VideoView = observer(() => {
     setExportModalOpen(false);
   };
 
-  const handleExportModalSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    handleExportModalClose();
-    appStateStore.currentVideo?.exportVideo();
-  };
-
   const handleBackClicked = () => {
     audioCtx.current?.resume().catch(() => undefined);
     if (!backConfirmation) {
@@ -399,25 +352,6 @@ const VideoView = observer(() => {
     }
 
     appStateStore.closeCurrentVideo();
-  };
-
-  const handleClickSelectExportPath = async () => {
-    const path = await save({
-      filters: [
-        {
-          name: "Video",
-          extensions: VIDEO_FORMATS,
-        },
-        {
-          name: "All",
-          extensions: ["*"],
-        },
-      ],
-    });
-
-    if (path) {
-      appStateStore.currentVideo?.setExportPath(path);
-    }
   };
 
   return (
@@ -528,160 +462,7 @@ const VideoView = observer(() => {
         </FormGroup>
       </Controls>
 
-      <Dialog open={exportModalOpen} onClose={handleExportModalClose} maxWidth={"md"} fullWidth>
-        <DialogTitle>Export video</DialogTitle>
-        <DialogContent>
-          <form onSubmit={handleExportModalSubmit} id="subscription-form">
-            <Grid container spacing={2}>
-              <Grid size={12}>
-                <TextField
-                  autoFocus
-                  required
-                  margin="dense"
-                  label="Export path"
-                  fullWidth
-                  variant="outlined"
-                  value={appStateStore.currentVideo.exportPath}
-                  onChange={(e) => appStateStore.currentVideo?.setExportPath(e.target.value)}
-                  slotProps={{
-                    input: {
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            onClick={handleClickSelectExportPath}
-                            // onMouseDown={handleMouseDownPassword}
-                            // onMouseUp={handleMouseUpPassword}
-                            edge="end"
-                          >
-                            <FolderIcon />
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-              </Grid>
-              <Grid size={4}>
-                <TextField
-                  required
-                  select
-                  fullWidth
-                  label="Video format"
-                  value={appStateStore.currentVideo.exportFormat}
-                  onChange={(e) => appStateStore.currentVideo?.setExportFormat(e.target.value)}
-                >
-                  {VIDEO_FORMATS.map((option) => (
-                    <MenuItem key={option} value={option}>
-                      {option}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-              <Grid size={4}>
-                <Autocomplete
-                  freeSolo
-                  options={[
-                    ...(appStateStore.currentVideo.exportGpuAcceleration == "nvidia"
-                      ? NVIDIA_VIDEO_ENCODERS
-                      : []),
-                    ...VIDEO_ENCODERS,
-                  ]}
-                  value={appStateStore.currentVideo.exportVideoEncoder}
-                  onChange={(e, newValue) =>
-                    appStateStore.currentVideo?.setExportVideoEncoder(newValue)
-                  }
-                  renderInput={(params) => (
-                    <TextField {...params} fullWidth label="Video encoder" />
-                  )}
-                />
-              </Grid>
-              <Grid size={4}>
-                <Autocomplete
-                  freeSolo
-                  options={VIDEO_RESOLUTIONS}
-                  value={appStateStore.currentVideo.exportResolution}
-                  onChange={(e, newValue) =>
-                    appStateStore.currentVideo?.setExportResolution(newValue ?? "")
-                  }
-                  onInputChange={(e, newValue) => {
-                    appStateStore.currentVideo?.setExportResolution(newValue ?? "");
-                  }}
-                  renderInput={(params) => (
-                    <TextField {...params} required fullWidth label="Resolution" />
-                  )}
-                />
-              </Grid>
-              <Grid size={4}>
-                <TextField
-                  label="Bitrate"
-                  placeholder="Auto"
-                  fullWidth
-                  value={appStateStore.currentVideo.exportBitrateKbps ?? ""}
-                  onChange={(e) =>
-                    appStateStore.currentVideo?.setExportBitrateKbps(
-                      e.target.value ? parseInt(e.target.value) : null,
-                    )
-                  }
-                  helperText={
-                    appStateStore.currentVideo.exportBitrateKbps &&
-                    `Estimated file size ${appStateStore.currentVideo.estimatedVideoSizeMb}Mb`
-                  }
-                  slotProps={{
-                    input: {
-                      type: "number",
-                      startAdornment: <></>,
-                      endAdornment: <InputAdornment position="end">kBit/s</InputAdornment>,
-                    },
-                  }}
-                />
-              </Grid>
-              <Grid size={4}>
-                <TextField
-                  label="Framerate"
-                  placeholder="Auto"
-                  fullWidth
-                  value={appStateStore.currentVideo.exportFrameRate ?? ""}
-                  onChange={(e) =>
-                    appStateStore.currentVideo?.setExportFrameRate(
-                      e.target.value ? parseInt(e.target.value) : null,
-                    )
-                  }
-                  slotProps={{
-                    input: {
-                      type: "number",
-                      startAdornment: <></>,
-                      endAdornment: <InputAdornment position="end">fps</InputAdornment>,
-                    },
-                  }}
-                />
-              </Grid>
-              <Grid size={4}>
-                <FormControl fullWidth>
-                  <InputLabel>GPU Acceleration</InputLabel>
-                  <Select
-                    value={appStateStore.currentVideo.exportGpuAcceleration}
-                    label="GPU Acceleration"
-                    onChange={(e) =>
-                      appStateStore.currentVideo?.setExportGpuAcceleration(
-                        e.target.value ? (e.target.value as GpuAcceleration) : null,
-                      )
-                    }
-                  >
-                    <MenuItem value={""}>None</MenuItem>
-                    <MenuItem value={"nvidia" as GpuAcceleration}>Nvidia</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
-          </form>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleExportModalClose}>Cancel</Button>
-          <Button type="submit" form="subscription-form">
-            Export video
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ExportWizardDialog open={exportModalOpen} onClose={handleExportModalClose} />
     </ViewContainer>
   );
 });

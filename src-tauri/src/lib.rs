@@ -6,6 +6,7 @@ mod ffmpeg_time_duration;
 mod ffprobe;
 mod handle_cli_args;
 mod handle_main_window_event;
+mod hw_encoders;
 mod integrated_server;
 mod logs_store;
 mod open_devtools_command;
@@ -16,6 +17,7 @@ use crate::ffmpeg::{FfmpegTasksQueue, create_ffmpeg_tasks_queue, emit_ffmpeg_que
 use crate::ffmpeg_export_command::{cancel_ffmpeg_task_by_index, ffmpeg_export};
 use crate::handle_cli_args::handle_cli_args_on_frontend_initialized;
 use crate::handle_main_window_event::handle_main_window_event;
+use crate::hw_encoders::detect_hw_encoders;
 use crate::integrated_server::{IntegratedServerState, get_integrated_server_state, start_integrated_server};
 use crate::logs_store::{LogsStore, get_logs, get_logs_store_target};
 use crate::open_devtools_command::open_devtools;
@@ -82,6 +84,7 @@ pub fn run() {
             get_logs,
             open_devtools,
             cancel_ffmpeg_task_by_index,
+            detect_hw_encoders,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

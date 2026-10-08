@@ -1,6 +1,6 @@
 use crate::ffmpeg::{FfmpegTasksQueue, enqueue_extract_audio_task};
 use crate::ffprobe;
-use crate::ffprobe::VideoAudioStreamsInfo;
+use crate::ffprobe::{VideoAudioStreamsInfo, VideoStreamInfo};
 use crate::integrated_server::IntegratedServerState;
 use log::error;
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,7 @@ use ts_rs::TS;
 pub struct SelectedVideoFile {
     path: String,
     audio_steams: VideoAudioStreamsInfo,
+    video_stream: Option<VideoStreamInfo>,
 }
 
 #[derive(Serialize, Deserialize, TS, Clone, Debug)]
@@ -53,9 +54,11 @@ pub async fn select_new_video_file_inner(file_path: Option<FilePath>, app_handle
 
         let path = path.to_string();
         let audio_steams = ffprobe::get_video_audio_streams_info(&path).unwrap_or(VideoAudioStreamsInfo::empty());
+        let video_stream = ffprobe::get_video_stream_info(&path);
         let selected_video_file = Some(SelectedVideoFile {
             path: path.clone(),
             audio_steams,
+            video_stream,
         });
 
         let ffmpeg_tasks_queue = app_handle.state::<FfmpegTasksQueue>();

@@ -8,6 +8,17 @@ import {ffmpegExport, GpuAcceleration} from "../generated";
 import {gainToGainValue} from "../lib/useAudioMixer.ts";
 import convertFilePath from "../lib/convertFilePath.ts";
 import AppStateStore from "./AppStateStore.ts";
+import {VideoStreamInfo} from "../generated/bindings/VideoStreamInfo.ts";
+import {
+  AUDIO_BITRATE_KBPS,
+  encoderVendor,
+  ExportPreset,
+  ExportPresetId,
+  isContainerCompatible,
+  MAX_BITRATE_KBPS,
+  resolvePresetCodec,
+  scaledResolution,
+} from "../lib/exportPresets.ts";
 
 export interface AudioStream {
   streamIndex: number;
@@ -28,11 +39,13 @@ export interface VideoState {
 }
 
 const MINIMAL_SECONDS_DIFF = 1;
+const MIN_TARGET_BITRATE_KBPS = 300;
 
 class VideoEditorStore {
   appStateStore: AppStateStore;
 
   path: string;
+  sourceVideo: VideoStreamInfo | null;
   audioStreams: AudioStream[];
   duration: number | null;
   trimStart: number | null;
@@ -191,8 +204,37 @@ class VideoEditorStore {
     return (this.trimEnd ?? 0) - (this.trimStart ?? 0);
   }
 
+  get rawTargetSizeBitrateKbps() {
+    if (this.exportTargetSizeMb == null || this.trimDurationSeconds <= 0) return null;
+    // 5% margin because single-pass encoders overshoot the requested bitrate
+    const totalKbps = (this.exportTargetSizeMb * 0.95 * 8 * 1024) / this.trimDurationSeconds;
+    return Math.floor(totalKbps - AUDIO_BITRATE_KBPS);
+  }
+
+  get targetSizeBitrateKbps() {
+    const raw = this.rawTargetSizeBitrateKbps;
+    return raw == null ? null : Math.min(MAX_BITRATE_KBPS, Math.max(MIN_TARGET_BITRATE_KBPS, raw));
+  }
+
+  get targetSizeUnreachable() {
+    const raw = this.rawTargetSizeBitrateKbps;
+    return raw != null && raw < MIN_TARGET_BITRATE_KBPS;
+  }
+
+  get exportContainerCompatible() {
+    return isContainerCompatible(this.exportFormat, this.exportVideoEncoder);
+  }
+
+  get effectiveBitrateKbps() {
+    return this.targetSizeBitrateKbps ?? this.exportBitrateKbps;
+  }
+
   get estimatedVideoSizeMb() {
-    return estimateVideoSize(this.exportBitrateKbps ?? 0, this.trimDurationSeconds);
+    if (this.effectiveBitrateKbps == null) return null;
+    return estimateVideoSize(
+      this.effectiveBitrateKbps + AUDIO_BITRATE_KBPS,
+      this.trimDurationSeconds,
+    );
   }
 
   exportPath = "";
@@ -200,20 +242,43 @@ class VideoEditorStore {
   setExportPath(path: string) {
     this.exportPath = path;
 
-    const filePathParts = path.split(".");
-    this.exportFormat = filePathParts.length > 1 ? filePathParts[filePathParts.length - 1] : "";
+    const fileName = path.split(/[\\/]/).pop() ?? "";
+    const dotIndex = fileName.lastIndexOf(".");
+    this.exportFormat = dotIndex > 0 ? fileName.slice(dotIndex + 1).toLowerCase() : "";
   }
 
   exportFormat = "";
+
+  exportPreset: ExportPresetId | "custom" | null = null;
+
+  setExportPreset(preset: ExportPresetId | "custom" | null) {
+    this.exportPreset = preset;
+  }
+
+  applyExportPreset(preset: ExportPreset, hwEncoders: string[], preferGpu: boolean) {
+    const codec = resolvePresetCodec(preset, hwEncoders, preferGpu);
+    if (!codec) return;
+
+    this.exportPreset = preset.id;
+    this.setExportCodec(codec);
+    this.setExportFormat(preset.container);
+    this.exportResolution = preset.shortSide
+      ? scaledResolution(this.sourceVideo, preset.shortSide)
+      : null;
+    this.exportFrameRate = null;
+    this.exportBitrateKbps = preset.bitrateKbps;
+    this.exportTargetSizeMb = preset.targetSizeMb;
+  }
 
   setExportFormat(format: string) {
     this.exportFormat = format;
     this.exportPath = replaceExtension(this.exportPath, this.exportFormat);
   }
 
-  exportResolution = "1920x1080";
+  // null keeps the source resolution
+  exportResolution: string | null = null;
 
-  setExportResolution(resolution: string) {
+  setExportResolution(resolution: string | null) {
     this.exportResolution = resolution;
   }
 
@@ -221,31 +286,32 @@ class VideoEditorStore {
 
   setExportBitrateKbps(bitrateKbps: number | null) {
     this.exportBitrateKbps = bitrateKbps;
+    this.exportTargetSizeMb = null;
   }
 
-  exportFrameRate: number | null = 60;
+  exportTargetSizeMb: number | null = null;
+
+  setExportTargetSizeMb(targetSizeMb: number | null) {
+    this.exportTargetSizeMb = targetSizeMb;
+    if (targetSizeMb != null) this.exportBitrateKbps = null;
+  }
+
+  // null keeps the source frame rate
+  exportFrameRate: number | null = null;
 
   setExportFrameRate(exportFrameRate: number | null) {
     this.exportFrameRate = exportFrameRate;
   }
 
-  exportVideoEncoder: string | null = null;
-
-  setExportVideoEncoder(exportVideoEncoder: string | null) {
-    this.exportVideoEncoder = exportVideoEncoder;
-  }
+  exportVideoEncoder: string | null = "libx264";
 
   exportGpuAcceleration: GpuAcceleration | null = null;
 
-  setExportGpuAcceleration(exportGpuAcceleration: GpuAcceleration | null) {
-    this.exportGpuAcceleration = exportGpuAcceleration;
-
-    switch (exportGpuAcceleration) {
-      case "nvidia":
-        if (this.exportVideoEncoder == null && this.exportFormat == "mp4")
-          this.exportVideoEncoder = "h264_nvenc";
-        break;
-    }
+  setExportCodec(codec: string) {
+    this.exportVideoEncoder = codec;
+    const vendor = encoderVendor(codec);
+    this.exportGpuAcceleration = vendor == "cpu" ? null : vendor;
+    if (!isContainerCompatible(this.exportFormat, codec)) this.setExportFormat("mp4");
   }
 
   async exportVideo() {
@@ -255,8 +321,8 @@ class VideoEditorStore {
         outputPath: this.exportPath,
         startTime: this.trimStart ?? 0,
         endTime: this.trimEnd ?? 0,
-        bitrate: this.exportBitrateKbps ? `${this.exportBitrateKbps}k` : null,
-        resolution: this.exportResolution.replace("x", ":"),
+        bitrate: this.effectiveBitrateKbps ? `${this.effectiveBitrateKbps}k` : null,
+        resolution: this.exportResolution?.replace("x", ":") ?? null,
         frameRate: this.exportFrameRate,
         videoCodec: this.exportVideoEncoder,
         gpuAcceleration: this.exportGpuAcceleration,
@@ -274,12 +340,14 @@ class VideoEditorStore {
     appStateStore: AppStateStore,
     path: string,
     videoAudioStreamsInfo: VideoAudioStreamsInfo = {audioStreams: [], duration: 0},
+    sourceVideo: VideoStreamInfo | null = null,
   ) {
     makeAutoObservable(this, {}, {autoBind: true});
 
     this.appStateStore = appStateStore;
 
     this.path = path;
+    this.sourceVideo = sourceVideo;
     this.audioStreams = videoAudioStreamsInfo.audioStreams.map((x) => ({
       streamIndex: x.index,
       active: true,
@@ -292,6 +360,9 @@ class VideoEditorStore {
 
     this.setVideoDuration(videoAudioStreamsInfo.duration);
     this.setExportPath(addPostfixToFilename(path, " - Trim"));
+    if (!isContainerCompatible(this.exportFormat, this.exportVideoEncoder)) {
+      this.exportVideoEncoder = "libvpx-vp9";
+    }
   }
 }
 

@@ -29,6 +29,8 @@ pub struct ExportAudioStreamOptions {
 #[serde(rename_all = "camelCase")]
 pub enum GpuAcceleration {
     Nvidia,
+    Amd,
+    Intel,
 }
 
 #[tauri::command]

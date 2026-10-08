@@ -331,7 +331,8 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                                         _ => None,
                                     }
                                 }
-                                None => None,
+                                // AMF/QSV encoders take software frames, so decoding and scaling stay on the CPU
+                                Some(GpuAcceleration::Amd | GpuAcceleration::Intel) | None => None,
                             }
                         };
 
@@ -388,7 +389,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             .map("[v]")
                             .map("[a]");
 
-                        if let Some(codec) = options.video_codec {
+                        if let Some(codec) = &options.video_codec {
                             ffmpeg_command.codec_video(codec);
                         }
 
@@ -401,7 +402,27 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             ffmpeg_command.arg(frame_rate.to_string().as_str());
                         }
 
-                        ffmpeg_command.preset("medium").output(&options.output_path);
+                        // Encoder families name their speed presets differently, and libvpx/AMF have no -preset at all
+                        let encoder_preset = match options.video_codec.as_deref() {
+                            None | Some("libx264" | "libx265") => Some("medium"),
+                            Some(codec) if codec.ends_with("_nvenc") => Some("p4"),
+                            Some(codec) if codec.ends_with("_qsv") => Some("medium"),
+                            _ => None,
+                        };
+                        if let Some(encoder_preset) = encoder_preset {
+                            ffmpeg_command.preset(encoder_preset);
+                        }
+
+                        // Apple players only open HEVC in MP4/MOV when it is tagged hvc1 instead of ffmpeg's default hev1
+                        let is_hevc = matches!(options.video_codec.as_deref(), Some(codec) if codec == "libx265" || codec.starts_with("hevc_"));
+                        let output_extension = std::path::Path::new(&options.output_path)
+                            .extension()
+                            .map(|e| e.to_string_lossy().to_lowercase());
+                        if is_hevc && matches!(output_extension.as_deref(), Some("mp4" | "mov" | "m4v")) {
+                            ffmpeg_command.args(["-tag:v", "hvc1"]);
+                        }
+
+                        ffmpeg_command.output(&options.output_path);
 
                         info!("Running ffmpeg command: {:?}", ffmpeg_command.print_command());
 
