@@ -1,10 +1,8 @@
-export const DEFAULT_INTEGRATED_SERVER_PORT = 38125;
+import {IntegratedServerStarted} from "../generated/bindings/IntegratedServerStarted.ts";
 
-function convertFilePath(path: string, port?: number | null): string;
-function convertFilePath(path: string | undefined, port?: number | null): string | undefined;
-function convertFilePath(path: string | undefined, port?: number | null): string | undefined {
-  if (!path) return undefined;
-  return `http://127.0.0.1:${port ?? DEFAULT_INTEGRATED_SERVER_PORT}/${encodeURIComponent(path)}`;
+function convertFilePath(path: string | undefined, server: IntegratedServerStarted | null): string | undefined {
+  if (!path || !server) return undefined;
+  return `http://127.0.0.1:${server.port}/${server.token}/${encodeURIComponent(path)}`;
 }
 
 export default convertFilePath;

@@ -57,7 +57,7 @@ class VideoEditorStore {
   videoPlayerError: ErrorEvent | null = null;
 
   getVideoPath() {
-    return convertFilePath(this.path, this.appStateStore.integratedServerStatus?.port);
+    return convertFilePath(this.path, this.appStateStore.integratedServerStatus);
   }
 
   setVideoDuration(duration: number) {

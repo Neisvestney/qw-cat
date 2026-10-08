@@ -223,7 +223,7 @@ const VideoView = observer(() => {
         .filter((x) => x.streamIndex != defaultStream?.streamIndex)
         .map((x) => ({
           streamIndex: x.streamIndex,
-          url: convertFilePath(x.path ?? undefined, appStateStore.integratedServerStatus?.port),
+          url: convertFilePath(x.path ?? undefined, appStateStore.integratedServerStatus),
           gain: toGain(x),
         })),
     };

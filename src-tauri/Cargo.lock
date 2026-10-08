@@ -3365,6 +3365,7 @@ dependencies = [
  "ffmpeg-sidecar",
  "fix-path-env",
  "futures",
+ "getrandom 0.3.4",
  "log",
  "ringbuf",
  "serde",
@@ -3380,6 +3381,7 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http",
+ "tracing",
  "ts-rs",
  "ureq",
 ]

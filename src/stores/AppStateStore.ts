@@ -85,7 +85,11 @@ class AppStateStore {
       });
     });
     const integratedServerState = await getIntegratedServerState();
-    if (integratedServerState) this.integratedServerStatus = integratedServerState;
+    if (integratedServerState) {
+      runInAction(() => {
+        this.integratedServerStatus = integratedServerState;
+      });
+    }
   }
 
   constructor() {
