@@ -145,7 +145,7 @@ const OptionCardRoot = styled(ButtonBase, {
     border: 1px solid ${selected ? theme.palette.primary.main : theme.palette.divider};
     background-color: ${selected
       ? alpha(theme.palette.primary.main, 0.08)
-      : theme.palette.action.hover};
+      : theme.palette.background.card};
     transition:
       border-color 150ms,
       background-color 150ms;
@@ -398,7 +398,10 @@ const ExportWizardDialog = observer(({open, onClose}: {open: boolean; onClose: (
       fullWidth
       sx={{zIndex: 1455}}
       // Reset once hidden, so reopening doesn't animate from the last step
-      slotProps={{transition: {onExited: () => setStepState([0, 1])}}}
+      slotProps={{
+        transition: {onExited: () => setStepState([0, 1])},
+        paper: {sx: {backgroundColor: "background.dialog", backgroundImage: "none"}},
+      }}
     >
       <MotionConfig reducedMotion="user" transition={TRANSITION}>
         <DialogTitle
