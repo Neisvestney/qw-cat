@@ -5,6 +5,10 @@ import {
   detectHwEncoders,
   getCustomExportPresets,
   getIntegratedServerState,
+  getRecentVideos,
+  openRecentVideo,
+  RecentVideo,
+  removeRecentVideo,
   saveCustomExportPresets,
   selectNewVideoFile,
 } from "../generated";
@@ -53,6 +57,8 @@ class AppStateStore {
   lastExportPreset: string | null = readStorage(LAST_PRESET_KEY);
 
   customExportPresets: CustomExportPreset[] = [];
+
+  recentVideos: RecentVideo[] = [];
 
   get exportPresets() {
     return [...EXPORT_PRESETS, ...this.customExportPresets.map(fromCustomExportPreset)];
@@ -140,6 +146,39 @@ class AppStateStore {
 
     this.filePickingInProgress = true;
     await selectNewVideoFile();
+  }
+
+  async loadRecentVideos() {
+    const videos = await getRecentVideos();
+    runInAction(() => {
+      this.recentVideos = videos;
+    });
+  }
+
+  async removeRecentVideo(path: string) {
+    this.recentVideos = this.recentVideos.filter((v) => v.path != path);
+    try {
+      await removeRecentVideo({path});
+    } catch (e) {
+      console.error("Can't remove recent video", e);
+      await this.loadRecentVideos();
+    }
+  }
+
+  async openRecentVideo(path: string) {
+    if (this.selectNewVideoFileDisabled) return;
+
+    this.filePickingInProgress = true;
+    try {
+      await openRecentVideo({path});
+    } catch (e) {
+      console.error("Can't open recent video", e);
+      runInAction(() => {
+        this.filePickingInProgress = false;
+        this.fileProcessingInfo = false;
+      });
+      await this.loadRecentVideos();
+    }
   }
 
   closeCurrentVideo() {

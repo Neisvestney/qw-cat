@@ -2,6 +2,7 @@ use crate::ffmpeg::{FfmpegTasksQueue, enqueue_extract_audio_task};
 use crate::ffprobe;
 use crate::ffprobe::{VideoAudioStreamsInfo, VideoStreamInfo};
 use crate::integrated_server::IntegratedServerState;
+use crate::recent_videos::record_recent_video;
 use log::error;
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager};
@@ -55,6 +56,7 @@ pub async fn select_new_video_file_inner(file_path: Option<FilePath>, app_handle
         let path = path.to_string();
         let audio_steams = ffprobe::get_video_audio_streams_info(&path).unwrap_or(VideoAudioStreamsInfo::empty());
         let video_stream = ffprobe::get_video_stream_info(&path);
+        record_recent_video(app_handle.clone(), path.clone(), audio_steams.duration);
         let selected_video_file = Some(SelectedVideoFile {
             path: path.clone(),
             audio_steams,

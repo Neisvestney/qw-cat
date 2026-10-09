@@ -11,6 +11,7 @@ mod hw_encoders;
 mod integrated_server;
 mod logs_store;
 mod open_devtools_command;
+mod recent_videos;
 mod select_new_video_file_command;
 mod temp_cleanup;
 
@@ -23,6 +24,7 @@ use crate::hw_encoders::detect_hw_encoders;
 use crate::integrated_server::{IntegratedServerState, get_integrated_server_state, start_integrated_server};
 use crate::logs_store::{LogsStore, get_logs, get_logs_store_target};
 use crate::open_devtools_command::open_devtools;
+use crate::recent_videos::{get_recent_videos, open_recent_video, remove_recent_video};
 use crate::select_new_video_file_command::select_new_video_file;
 use crate::temp_cleanup::cleanup_temp;
 use std::env;
@@ -89,6 +91,9 @@ pub fn run() {
             detect_hw_encoders,
             get_custom_export_presets,
             save_custom_export_presets,
+            get_recent_videos,
+            open_recent_video,
+            remove_recent_video,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
