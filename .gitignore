@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 
 src-tauri/bundle/generated
+src/generated/.typecache
 
 # Flatpak
 .flatpak-builder
