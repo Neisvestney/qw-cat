@@ -1,3 +1,4 @@
+mod custom_export_presets;
 mod ffmpeg;
 mod ffmpeg_download;
 mod ffmpeg_export_command;
@@ -13,6 +14,7 @@ mod open_devtools_command;
 mod select_new_video_file_command;
 mod temp_cleanup;
 
+use crate::custom_export_presets::{get_custom_export_presets, save_custom_export_presets};
 use crate::ffmpeg::{FfmpegTasksQueue, create_ffmpeg_tasks_queue, emit_ffmpeg_queue_status, enqueue_download_ffmpeg_task};
 use crate::ffmpeg_export_command::{cancel_ffmpeg_task_by_index, ffmpeg_export};
 use crate::handle_cli_args::handle_cli_args_on_frontend_initialized;
@@ -85,6 +87,8 @@ pub fn run() {
             open_devtools,
             cancel_ffmpeg_task_by_index,
             detect_hw_encoders,
+            get_custom_export_presets,
+            save_custom_export_presets,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

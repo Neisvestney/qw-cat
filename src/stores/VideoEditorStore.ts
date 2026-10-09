@@ -4,7 +4,7 @@ import {AudioStreamFilePath} from "../generated/bindings/AudioStreamFilePath.ts"
 import addPostfixToFilename from "../lib/addPostfixToFilename.ts";
 import replaceExtension from "../lib/replaceExtension.ts";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
-import {ffmpegExport, GpuAcceleration} from "../generated";
+import {CustomExportPreset, ffmpegExport, GpuAcceleration} from "../generated";
 import {gainToGainValue} from "../lib/useAudioMixer.ts";
 import convertFilePath from "../lib/convertFilePath.ts";
 import AppStateStore from "./AppStateStore.ts";
@@ -13,10 +13,11 @@ import {
   AUDIO_BITRATE_KBPS,
   AudioCodec,
   audioEncoder,
+  codecFamily,
+  DEFAULT_PRESET_AUDIO,
   defaultAudioBitrateKbps,
   encoderVendor,
   ExportPreset,
-  ExportPresetId,
   firstCompatibleContainer,
   hasAudio,
   isAudioCodecCompatible,
@@ -285,9 +286,9 @@ class VideoEditorStore {
 
   exportFormat = "";
 
-  exportPreset: ExportPresetId | "custom" | null = null;
+  exportPreset: string | null = null;
 
-  setExportPreset(preset: ExportPresetId | "custom" | null) {
+  setExportPreset(preset: string | null) {
     this.exportPreset = preset;
   }
 
@@ -304,6 +305,32 @@ class VideoEditorStore {
     this.exportFrameRate = preset.frameRate;
     this.exportBitrateKbps = preset.bitrateKbps;
     this.exportTargetSizeMb = preset.targetSizeMb;
+
+    const audio = preset.audio ?? DEFAULT_PRESET_AUDIO;
+    this.exportAudioCodec = audio.codec;
+    this.resetIncompatibleAudioCodec();
+    this.exportAudioBitrateKbps = audio.bitrateKbps;
+    this.exportMixAudio = audio.mix;
+  }
+
+  toCustomExportPreset(title: string): CustomExportPreset | null {
+    const family = codecFamily(this.exportVideoEncoder);
+    if (!family) return null;
+    const [width, height] = (this.exportResolution ?? "").split("x").map(Number);
+    return {
+      id: crypto.randomUUID(),
+      title,
+      family,
+      container: this.exportFormat,
+      shortSide: width && height ? Math.min(width, height) : null,
+      frameRate: this.exportFrameRate,
+      bitrateKbps: this.exportBitrateKbps,
+      targetSizeMb: this.exportTargetSizeMb,
+      useGpu: this.exportGpuAcceleration != null,
+      audioCodec: this.exportAudioCodec,
+      audioBitrateKbps: this.exportAudioBitrateKbps,
+      mixAudio: this.exportMixAudio,
+    };
   }
 
   setExportFormat(format: string) {

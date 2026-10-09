@@ -1,4 +1,4 @@
-import {GpuAcceleration} from "../generated";
+import {CustomExportPreset, GpuAcceleration} from "../generated";
 import {VideoStreamInfo} from "../generated/bindings/VideoStreamInfo.ts";
 
 export type CodecFamily = "h264" | "hevc" | "av1" | "vp9" | "prores" | "gif" | "webp";
@@ -231,18 +231,15 @@ export function hasGpuEncoder(hwEncoders: string[]) {
   return ENCODERS.some((e) => e.vendor != "cpu" && isVendorAvailable(e.vendor, hwEncoders));
 }
 
-export type ExportPresetId =
-  | "discord"
-  | "messenger"
-  | "hq"
-  | "small"
-  | "web"
-  | "editing"
-  | "gif"
-  | "fast";
+export interface PresetAudio {
+  codec: AudioCodec;
+  bitrateKbps: number;
+  mix: boolean;
+}
 
 export interface ExportPreset {
-  id: ExportPresetId;
+  id: string;
+  custom?: boolean;
   title: string;
   description: string;
   details: string;
@@ -254,6 +251,8 @@ export interface ExportPreset {
   bitrateKbps: number | null;
   targetSizeMb: number | null;
   gpu: "optional" | "default" | "required";
+  // Built-in presets reset the audio to DEFAULT_PRESET_AUDIO
+  audio?: PresetAudio;
 }
 
 export const EXPORT_PRESETS: ExportPreset[] = [
@@ -363,8 +362,56 @@ export const EXPORT_PRESETS: ExportPreset[] = [
   },
 ];
 
-export function findExportPreset(id: string | null) {
-  return EXPORT_PRESETS.find((p) => p.id == id) ?? null;
+export function findExportPreset(id: string | null, presets: ExportPreset[] = EXPORT_PRESETS) {
+  return presets.find((p) => p.id == id) ?? null;
+}
+
+function presetDetails(p: CustomExportPreset) {
+  const codec = CPU_CODECS[p.family as CodecFamily] ?? null;
+  const bitrate =
+    p.targetSizeMb != null
+      ? `${p.targetSizeMb} MB`
+      : p.bitrateKbps != null
+        ? `${(p.bitrateKbps / 1000).toFixed(1)} Mbit/s`
+        : supportsBitrate(codec) && "auto bitrate";
+  const audio = !hasAudio(codec)
+    ? "no sound"
+    : isLosslessAudio(p.audioCodec as AudioCodec)
+      ? "lossless audio"
+      : `${p.audioBitrateKbps} kbps audio`;
+  return [
+    p.shortSide ? `${p.shortSide}p` : "source",
+    p.frameRate && `${p.frameRate} fps`,
+    bitrate,
+    audio,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export function fromCustomExportPreset(p: CustomExportPreset): ExportPreset {
+  const family = p.family as CodecFamily;
+  return {
+    id: p.id,
+    custom: true,
+    title: p.title,
+    description: `${FAMILY_LABELS[family] ?? p.family} in ${p.container}`,
+    details: presetDetails(p),
+    family,
+    container: p.container,
+    shortSide: p.shortSide ?? null,
+    frameRate: p.frameRate ?? null,
+    bitrateKbps: p.bitrateKbps ?? null,
+    targetSizeMb: p.targetSizeMb ?? null,
+    gpu: p.useGpu ? "default" : "optional",
+    audio: {
+      codec: AUDIO_CODECS.includes(p.audioCodec as AudioCodec)
+        ? (p.audioCodec as AudioCodec)
+        : "auto",
+      bitrateKbps: p.audioBitrateKbps,
+      mix: p.mixAudio,
+    },
+  };
 }
 
 export function resolvePresetCodec(preset: ExportPreset, hwEncoders: string[], preferGpu: boolean) {
@@ -418,6 +465,12 @@ export function widthForHeight(source: VideoStreamInfo | null, height: number) {
 export const STANDARD_SHORT_SIDES = [1080, 720, 480];
 export const STANDARD_FRAME_RATES = [60, 30, 24];
 export const AUDIO_BITRATE_KBPS = 128;
+
+export const DEFAULT_PRESET_AUDIO: PresetAudio = {
+  codec: "auto",
+  bitrateKbps: AUDIO_BITRATE_KBPS,
+  mix: true,
+};
 export const AUDIO_BITRATES_KBPS = [32, 48, 64, 96, 128, 160, 192, 256, 320];
 // Rough FLAC average, only used to budget the video bitrate for a target size
 export const LOSSLESS_KBPS_PER_CHANNEL = 400;

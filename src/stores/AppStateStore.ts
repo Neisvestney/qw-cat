@@ -1,13 +1,20 @@
 import React from "react";
-import {makeAutoObservable, runInAction} from "mobx";
-import {detectHwEncoders, getIntegratedServerState, selectNewVideoFile} from "../generated";
+import {makeAutoObservable, runInAction, toJS} from "mobx";
+import {
+  CustomExportPreset,
+  detectHwEncoders,
+  getCustomExportPresets,
+  getIntegratedServerState,
+  saveCustomExportPresets,
+  selectNewVideoFile,
+} from "../generated";
 import VideoEditorStore from "./VideoEditorStore.ts";
 import {SelectNewVideoFileEvent} from "../generated/bindings/SelectNewVideoFileEvent.ts";
 import FfmpegTasksQueue from "./FfmpegTasksQueue.ts";
 import {IntegratedServerStarted} from "../generated/bindings/IntegratedServerStarted.ts";
 import {emit} from "@tauri-apps/api/event";
 import {AsyncEventsDisposer, createAsyncEventsDisposer} from "../lib/createAsyncEventsDisposer.ts";
-import {ExportPresetId, findExportPreset} from "../lib/exportPresets.ts";
+import {EXPORT_PRESETS, fromCustomExportPreset} from "../lib/exportPresets.ts";
 
 const PREFER_GPU_KEY = "export.preferGpu";
 const LAST_PRESET_KEY = "export.lastPreset";
@@ -42,8 +49,14 @@ class AppStateStore {
 
   preferGpuEncoding = readStorage(PREFER_GPU_KEY) == "true";
 
-  lastExportPreset: ExportPresetId | null =
-    findExportPreset(readStorage(LAST_PRESET_KEY))?.id ?? null;
+  // May point to a deleted custom preset, so it's resolved on use
+  lastExportPreset: string | null = readStorage(LAST_PRESET_KEY);
+
+  customExportPresets: CustomExportPreset[] = [];
+
+  get exportPresets() {
+    return [...EXPORT_PRESETS, ...this.customExportPresets.map(fromCustomExportPreset)];
+  }
 
   private hwEncodersRequest: Promise<string[]> | null = null;
 
@@ -71,9 +84,49 @@ class AppStateStore {
     writeStorage(PREFER_GPU_KEY, String(preferGpu));
   }
 
-  setLastExportPreset(preset: ExportPresetId) {
+  setLastExportPreset(preset: string) {
     this.lastExportPreset = preset;
     writeStorage(LAST_PRESET_KEY, preset);
+  }
+
+  async loadCustomExportPresets() {
+    const presets = await getCustomExportPresets();
+    runInAction(() => {
+      this.customExportPresets = presets;
+    });
+  }
+
+  addCustomExportPreset(preset: CustomExportPreset) {
+    this.customExportPresets.push(preset);
+    return this.persistCustomExportPresets();
+  }
+
+  renameCustomExportPreset(id: string, title: string) {
+    const preset = this.customExportPresets.find((p) => p.id == id);
+    if (!preset) return Promise.resolve();
+    preset.title = title;
+    return this.persistCustomExportPresets();
+  }
+
+  deleteCustomExportPreset(id: string) {
+    this.customExportPresets = this.customExportPresets.filter((p) => p.id != id);
+    if (this.currentVideo?.exportPreset == id) this.currentVideo.setExportPreset("custom");
+    return this.persistCustomExportPresets();
+  }
+
+  exportPresetsSaveError: string | null = null;
+
+  clearExportPresetsSaveError() {
+    this.exportPresetsSaveError = null;
+  }
+
+  private persistCustomExportPresets() {
+    return saveCustomExportPresets({presets: toJS(this.customExportPresets)}).catch((e) => {
+      console.error("Can't save custom export presets", e);
+      runInAction(() => {
+        this.exportPresetsSaveError = String(e);
+      });
+    });
   }
 
   private disposer: AsyncEventsDisposer | null = null;
@@ -96,6 +149,9 @@ class AppStateStore {
   async init() {
     const disposer = createAsyncEventsDisposer();
     this.disposer = disposer;
+    this.loadCustomExportPresets().catch((e) =>
+      console.error("Can't load custom export presets", e),
+    );
     await this.subscribeToIntegratedServerEvents(disposer);
     await this.subscribeToVideoSelectionEvent(disposer);
     await this.ffmpegTasksQueue.listenToFfmpegEvents(disposer);

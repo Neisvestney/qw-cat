@@ -24,6 +24,7 @@ import {
   FormControlLabel,
   IconButton,
   InputAdornment,
+  Menu,
   MenuItem,
   Slider,
   Stack,
@@ -51,6 +52,8 @@ import CompressIcon from "@mui/icons-material/Compress";
 import MovieEditIcon from "@mui/icons-material/MovieEdit";
 import GifBoxIcon from "@mui/icons-material/GifBox";
 import TuneIcon from "@mui/icons-material/Tune";
+import BookmarkIcon from "@mui/icons-material/Bookmark";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import LinkIcon from "@mui/icons-material/Link";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
 import {AppStateStoreContext} from "../stores/AppStateStore.ts";
@@ -68,8 +71,7 @@ import {
   ENCODERS,
   encoderLabel,
   encoderVendor,
-  EXPORT_PRESETS,
-  ExportPresetId,
+  ExportPreset,
   findExportPreset,
   hasAudio,
   hasGpuEncoder,
@@ -109,7 +111,7 @@ const VIDEO_FORMATS = [
 
 const STEPS = ["Purpose", "Video", "Audio & save"];
 
-const PRESET_ICONS: Record<ExportPresetId | "custom", React.ReactNode> = {
+const PRESET_ICONS: Record<string, React.ReactNode> = {
   discord: <ForumIcon color="primary" />,
   messenger: <SendIcon color="primary" />,
   hq: <HighQualityIcon color="primary" />,
@@ -120,6 +122,11 @@ const PRESET_ICONS: Record<ExportPresetId | "custom", React.ReactNode> = {
   fast: <BoltIcon color="primary" />,
   custom: <TuneIcon color="primary" />,
 };
+
+const CUSTOM_PRESET_ICON = <BookmarkIcon color="primary" />;
+
+// Above the wizard dialog
+const OVER_WIZARD_Z_INDEX = 1456;
 
 const OptionCardRoot = styled(ButtonBase, {
   shouldForwardProp: (prop) => prop !== "selected",
@@ -161,9 +168,21 @@ interface OptionCardProps {
   selected: boolean;
   disabled?: boolean;
   onClick: () => void;
+  // Kept outside the card, a button can't hold another button
+  action?: React.ReactNode;
 }
 
-const OptionCard = observer(
+const OptionCard = observer((props: OptionCardProps) => {
+  if (!props.action) return <OptionCardContent {...props} />;
+  return (
+    <Box sx={{position: "relative", height: "100%"}}>
+      <OptionCardContent {...props} />
+      <Box sx={{position: "absolute", top: 6, right: 6}}>{props.action}</Box>
+    </Box>
+  );
+});
+
+const OptionCardContent = observer(
   ({title, description, details, icon, selected, disabled, onClick}: OptionCardProps) => (
     <OptionCardRoot
       selected={selected}
@@ -344,7 +363,10 @@ const ExportWizardDialog = observer(({open, onClose}: {open: boolean; onClose: (
     if (!open) return;
     appStateStore.loadHwEncoders().then((hwEncoders) => {
       const video = appStateStore.currentVideo;
-      const lastPreset = findExportPreset(appStateStore.lastExportPreset);
+      const lastPreset = findExportPreset(
+        appStateStore.lastExportPreset,
+        appStateStore.exportPresets,
+      );
       if (video && video.exportPreset == null && lastPreset) {
         video.applyExportPreset(lastPreset, hwEncoders, appStateStore.preferGpuEncoding);
       }
@@ -362,7 +384,7 @@ const ExportWizardDialog = observer(({open, onClose}: {open: boolean; onClose: (
   const handleBack = () => setStep(Math.max(0, step - 1));
 
   const handleExport = () => {
-    const preset = findExportPreset(video.exportPreset);
+    const preset = findExportPreset(video.exportPreset, appStateStore.exportPresets);
     if (preset) appStateStore.setLastExportPreset(preset.id);
     onClose();
     video.exportVideo();
@@ -474,7 +496,7 @@ const PurposeStep = observer(
 
     const handlePreferGpuChange = (checked: boolean) => {
       appStateStore.setPreferGpuEncoding(checked);
-      const preset = findExportPreset(video.exportPreset);
+      const preset = findExportPreset(video.exportPreset, appStateStore.exportPresets);
       if (preset) video.applyExportPreset(preset, hwEncoders, checked);
     };
 
@@ -482,13 +504,13 @@ const PurposeStep = observer(
       <Stack spacing={2}>
         <Section label="What is this clip for?">
           <CardGrid minWidth={200}>
-            {EXPORT_PRESETS.map((preset) => {
+            {appStateStore.exportPresets.map((preset) => {
               const codec = resolvePresetCodec(preset, hwEncoders, preferGpu);
               const detecting = appStateStore.hwEncoders == null;
               return (
                 <OptionCard
                   key={preset.id}
-                  icon={PRESET_ICONS[preset.id]}
+                  icon={preset.custom ? CUSTOM_PRESET_ICON : PRESET_ICONS[preset.id]}
                   title={preset.title}
                   description={
                     codec
@@ -506,6 +528,7 @@ const PurposeStep = observer(
                     video.applyExportPreset(preset, hwEncoders, preferGpu);
                     onPresetPicked(false);
                   }}
+                  action={preset.custom && <CustomPresetMenu preset={preset} />}
                 />
               );
             })}
@@ -1240,11 +1263,127 @@ const AudioSection = observer(({video}: {video: VideoEditorStore}) => {
   );
 });
 
+const PresetNameDialog = observer(
+  ({
+    open,
+    title,
+    initialName,
+    submitLabel,
+    onClose,
+    onSubmit,
+  }: {
+    open: boolean;
+    title: string;
+    initialName: string;
+    submitLabel: string;
+    onClose: () => void;
+    onSubmit: (name: string) => void;
+  }) => {
+    const [name, setName] = useState(initialName);
+    const trimmed = name.trim();
+
+    const submit = () => {
+      if (!trimmed) return;
+      onSubmit(trimmed);
+      onClose();
+    };
+
+    return (
+      <Dialog
+        open={open}
+        onClose={onClose}
+        maxWidth="xs"
+        fullWidth
+        sx={{zIndex: OVER_WIZARD_Z_INDEX}}
+        slotProps={{transition: {onEnter: () => setName(initialName)}}}
+      >
+        <DialogTitle>{title}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            margin="dense"
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key == "Enter" && submit()}
+            slotProps={{htmlInput: {maxLength: 60}}}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="contained" onClick={submit} disabled={!trimmed}>
+            {submitLabel}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  },
+);
+
+const CustomPresetMenu = observer(({preset}: {preset: ExportPreset}) => {
+  const appStateStore = useContext(AppStateStoreContext);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [renaming, setRenaming] = useState(false);
+
+  return (
+    <>
+      <IconButton
+        size="small"
+        aria-label="Preset actions"
+        onClick={(e) => setAnchor(e.currentTarget)}
+      >
+        <MoreVertIcon fontSize="small" />
+      </IconButton>
+      <Menu
+        anchorEl={anchor}
+        open={anchor != null}
+        onClose={() => setAnchor(null)}
+        sx={{zIndex: OVER_WIZARD_Z_INDEX}}
+      >
+        <MenuItem
+          onClick={() => {
+            setAnchor(null);
+            setRenaming(true);
+          }}
+        >
+          Rename
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setAnchor(null);
+            appStateStore.deleteCustomExportPreset(preset.id);
+          }}
+        >
+          Delete
+        </MenuItem>
+      </Menu>
+      <PresetNameDialog
+        open={renaming}
+        title="Rename preset"
+        initialName={preset.title}
+        submitLabel="Rename"
+        onClose={() => setRenaming(false)}
+        onSubmit={(name) => appStateStore.renameCustomExportPreset(preset.id, name)}
+      />
+    </>
+  );
+});
+
 const SaveStep = observer(
   ({video, onEditVideo}: {video: VideoEditorStore; onEditVideo: () => void}) => {
-    const preset = findExportPreset(video.exportPreset);
+    const appStateStore = useContext(AppStateStoreContext);
+    const preset = findExportPreset(video.exportPreset, appStateStore.exportPresets);
     const codec = video.exportVideoEncoder;
     const source = video.sourceVideo;
+    const [savingPreset, setSavingPreset] = useState(false);
+
+    const handleSavePreset = (name: string) => {
+      const custom = video.toCustomExportPreset(name);
+      if (!custom) return;
+      appStateStore.addCustomExportPreset(custom);
+      video.setExportPreset(custom.id);
+    };
 
     const handleSelectExportPath = async () => {
       const path = await save({
@@ -1269,7 +1408,22 @@ const SaveStep = observer(
       : "auto bitrate";
 
     const summary: [string, React.ReactNode][] = [
-      ["Preset", preset?.title ?? "Custom"],
+      [
+        "Preset",
+        <>
+          {preset?.title ?? "Custom"}
+          {!preset && (
+            <Button
+              size="small"
+              sx={{ml: 1, minWidth: 0, py: 0}}
+              disabled={!codecFamily(codec)}
+              onClick={() => setSavingPreset(true)}
+            >
+              Save as preset
+            </Button>
+          )}
+        </>,
+      ],
       ["Encoder", encoderLabel(encoderVendor(codec))],
       [
         "Video",
@@ -1332,6 +1486,14 @@ const SaveStep = observer(
             ))}
           </Box>
         </Section>
+        <PresetNameDialog
+          open={savingPreset}
+          title="Save as preset"
+          initialName={`${codecLabel(codec ?? "")} ${video.exportFormat}`}
+          submitLabel="Save"
+          onClose={() => setSavingPreset(false)}
+          onSubmit={handleSavePreset}
+        />
       </Stack>
     );
   },
