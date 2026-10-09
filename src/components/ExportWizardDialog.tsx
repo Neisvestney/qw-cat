@@ -1,12 +1,22 @@
 import {observer} from "mobx-react-lite";
-import React, {useContext, useEffect, useRef, useState} from "react";
+import React, {useCallback, useContext, useEffect, useLayoutEffect, useRef, useState} from "react";
+import {
+  AnimatePresence,
+  animate,
+  AnimationPlaybackControls,
+  motion,
+  MotionConfig,
+  Transition,
+  useSpring,
+  useTransform,
+  Variants,
+} from "motion/react";
 import {
   alpha,
   Box,
   Button,
   ButtonBase,
   Chip,
-  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -121,7 +131,9 @@ const OptionCardRoot = styled(ButtonBase, {
     background-color: ${selected
       ? alpha(theme.palette.primary.main, 0.08)
       : theme.palette.action.hover};
-    transition: border-color 150ms;
+    transition:
+      border-color 150ms,
+      background-color 150ms;
 
     &:hover {
       border-color: ${selected ? theme.palette.primary.main : theme.palette.text.secondary};
@@ -155,12 +167,12 @@ const OptionCard = observer(
       <Typography variant="subtitle2">{title}</Typography>
       {description && (
         <Typography variant="caption" color="text.secondary">
-          {description}
+          <FadeText text={description} />
         </Typography>
       )}
       {details && (
         <Typography variant="caption" color="text.disabled" sx={{fontFamily: "monospace"}}>
-          {details}
+          <FadeText text={details} />
         </Typography>
       )}
     </OptionCardRoot>
@@ -171,6 +183,7 @@ const CardGrid = observer(
   ({minWidth = 150, children}: {minWidth?: number; children: React.ReactNode}) => (
     <Box
       sx={{
+        position: "relative",
         display: "grid",
         gridTemplateColumns: `repeat(auto-fill, minmax(${minWidth}px, 1fr))`,
         gap: 1.25,
@@ -190,17 +203,137 @@ const Section = observer(({label, children}: {label: string; children: React.Rea
   </Stack>
 ));
 
+const TRANSITION: Transition = {duration: 0.25, ease: [0.4, 0, 0.2, 1]};
+
+const stepVariants: Variants = {
+  enter: (direction: number) => ({x: `${direction * 30}%`, opacity: 0}),
+  center: {x: 0, opacity: 1, pointerEvents: "auto"},
+  // The leaving step's handlers close over the old step, so clicks on it must not go through
+  exit: (direction: number) => ({x: `${direction * -30}%`, opacity: 0, pointerEvents: "none"}),
+};
+
+const cardPresence = {
+  initial: {opacity: 0, scale: 0.92},
+  animate: {opacity: 1, scale: 1},
+  exit: {opacity: 0, scale: 0.92},
+};
+
+// Without `trigger` every size change animates. With it only changes caused by a new trigger value do,
+// otherwise it stays auto so animations inside aren't chased frame by frame
+const AnimatedHeight = observer(
+  ({trigger, children}: {trigger?: unknown; children: React.ReactNode}) => {
+    const outerRef = useRef<HTMLDivElement>(null);
+    const innerRef = useRef<HTMLDivElement>(null);
+    const lastHeight = useRef(0);
+    const target = useRef<number | null>(null);
+    const controls = useRef<AnimationPlaybackControls | null>(null);
+    const alwaysAnimate = trigger === undefined;
+
+    const animateTo = useCallback((to: number) => {
+      if (to == (target.current ?? lastHeight.current)) return;
+      const outer = outerRef.current!;
+      const from =
+        target.current == null ? lastHeight.current : outer.getBoundingClientRect().height;
+      target.current = to;
+      controls.current?.stop();
+      // Set synchronously so the new content's height never paints for a frame before the animation starts
+      outer.style.height = `${from}px`;
+      // Clipped only while animating, otherwise it cuts off slider thumbs and focus rings
+      outer.style.overflow = "hidden";
+      controls.current = animate(
+        outer,
+        {height: [from, to]},
+        {
+          ...TRANSITION,
+          onComplete: () => {
+            if (target.current != to) return;
+            target.current = null;
+            outer.style.height = "";
+            outer.style.overflow = "";
+          },
+        },
+      );
+    }, []);
+
+    useLayoutEffect(() => {
+      const inner = innerRef.current!;
+      lastHeight.current = inner.offsetHeight;
+      const observer = new ResizeObserver(() => {
+        const height = inner.offsetHeight;
+        if (alwaysAnimate || target.current != null) animateTo(height);
+        lastHeight.current = height;
+      });
+      observer.observe(inner);
+      return () => {
+        observer.disconnect();
+        controls.current?.stop();
+      };
+    }, [alwaysAnimate, animateTo]);
+
+    useLayoutEffect(() => {
+      if (!alwaysAnimate) animateTo(innerRef.current!.offsetHeight);
+    }, [trigger, alwaysAnimate, animateTo]);
+
+    return (
+      <div ref={outerRef}>
+        <div ref={innerRef} style={{position: "relative", display: "flow-root"}}>
+          {children}
+        </div>
+      </div>
+    );
+  },
+);
+
+// Stack spacing would leave a gap while hidden, so the margin is reset inline and the gap moves inside
+const Reveal = observer(
+  ({show, gap = 1, children}: {show: boolean; gap?: number; children: React.ReactNode}) => (
+    <AnimatePresence initial={false}>
+      {show && (
+        <motion.div
+          key="reveal"
+          initial={{height: 0, opacity: 0, overflow: "hidden"}}
+          animate={{height: "auto", opacity: 1, transitionEnd: {overflow: "visible"}}}
+          exit={{height: 0, opacity: 0, overflow: "hidden"}}
+          style={{marginTop: 0}}
+        >
+          <Box sx={{pt: gap}}>{children}</Box>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  ),
+);
+
+const FadeText = observer(({text}: {text: string}) => (
+  <AnimatePresence mode="wait" initial={false}>
+    <motion.span
+      key={text}
+      initial={{opacity: 0}}
+      animate={{opacity: 1}}
+      exit={{opacity: 0}}
+      transition={{duration: 0.12}}
+    >
+      {text}
+    </motion.span>
+  </AnimatePresence>
+));
+
+const AnimatedNumber = observer(({value}: {value: number}) => {
+  const spring = useSpring(value, {visualDuration: 0.35, bounce: 0});
+  const rounded = useTransform(spring, (v) => Math.round(v));
+  useEffect(() => spring.set(value), [spring, value]);
+  return <motion.span>{rounded}</motion.span>;
+});
+
 const formatResolution = (resolution: string) => resolution.replace("x", "×");
 const formatFps = (fps: number) => String(Number(fps.toFixed(2)));
 const formatMbps = (kbps: number) => `${(kbps / 1000).toFixed(1)} Mbit/s`;
 
 const ExportWizardDialog = observer(({open, onClose}: {open: boolean; onClose: () => void}) => {
   const appStateStore = useContext(AppStateStoreContext);
-  const [step, setStep] = useState(0);
+  const [[step, direction], setStepState] = useState([0, 1]);
 
   useEffect(() => {
     if (!open) return;
-    setStep(0);
     appStateStore.loadHwEncoders().then((hwEncoders) => {
       const video = appStateStore.currentVideo;
       const lastPreset = findExportPreset(appStateStore.lastExportPreset);
@@ -216,6 +349,7 @@ const ExportWizardDialog = observer(({open, onClose}: {open: boolean; onClose: (
   const presetChosen = video.exportPreset != null;
   const skipVideoStep = presetChosen && video.exportPreset != "custom";
 
+  const setStep = (next: number) => setStepState([next, next > step ? 1 : -1]);
   const handleNext = () => setStep(step == 0 && skipVideoStep ? 2 : Math.min(2, step + 1));
   const handleBack = () => setStep(Math.max(0, step - 1));
 
@@ -227,62 +361,91 @@ const ExportWizardDialog = observer(({open, onClose}: {open: boolean; onClose: (
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth={"md"} fullWidth>
-      <DialogTitle sx={{display: "flex", justifyContent: "space-between", alignItems: "baseline"}}>
-        Export video
-        <Typography variant="caption" color="text.secondary" sx={{fontFamily: "monospace"}}>
-          {video.estimatedVideoSizeMb != null && `≈ ${video.estimatedVideoSizeMb} MB · `}
-          {format(video.trimDurationSeconds * 1000, {ms: true})}
-        </Typography>
-      </DialogTitle>
-      <Stepper nonLinear activeStep={step} sx={{px: 3, pb: 2}}>
-        {STEPS.map((label, i) => {
-          const skipped = i == 1 && skipVideoStep && step != 1;
-          return (
-            <Step key={label} completed={i < step && !skipped} disabled={i > 0 && !presetChosen}>
-              <StepButton
-                onClick={() => setStep(i)}
-                optional={
-                  skipped ? (
-                    <Typography variant="caption" color="text.secondary">
-                      From preset
-                    </Typography>
-                  ) : undefined
-                }
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={"md"}
+      fullWidth
+      // Reset once hidden, so reopening doesn't animate from the last step
+      slotProps={{transition: {onExited: () => setStepState([0, 1])}}}
+    >
+      <MotionConfig reducedMotion="user" transition={TRANSITION}>
+        <DialogTitle
+          sx={{display: "flex", justifyContent: "space-between", alignItems: "baseline"}}
+        >
+          Export video
+          <Typography variant="caption" color="text.secondary" sx={{fontFamily: "monospace"}}>
+            {video.estimatedVideoSizeMb != null && (
+              <>
+                ≈ <AnimatedNumber value={video.estimatedVideoSizeMb} /> MB ·{" "}
+              </>
+            )}
+            {format(video.trimDurationSeconds * 1000, {ms: true})}
+          </Typography>
+        </DialogTitle>
+        <Stepper nonLinear activeStep={step} sx={{px: 3, pb: 2}}>
+          {STEPS.map((label, i) => {
+            const skipped = i == 1 && skipVideoStep && step != 1;
+            return (
+              <Step key={label} completed={i < step && !skipped} disabled={i > 0 && !presetChosen}>
+                <StepButton
+                  onClick={() => setStep(i)}
+                  optional={
+                    skipped ? (
+                      <Typography variant="caption" color="text.secondary">
+                        From preset
+                      </Typography>
+                    ) : undefined
+                  }
+                >
+                  {label}
+                </StepButton>
+              </Step>
+            );
+          })}
+        </Stepper>
+        {/* Clips the sliding steps when their heights match and AnimatedHeight doesn't clip */}
+        <DialogContent sx={{pt: 0, overflowX: "hidden"}}>
+          <AnimatedHeight trigger={step}>
+            <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+              <motion.div
+                key={step}
+                custom={direction}
+                variants={stepVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
               >
-                {label}
-              </StepButton>
-            </Step>
-          );
-        })}
-      </Stepper>
-      <DialogContent sx={{pt: 0}}>
-        {step == 0 && (
-          <PurposeStep video={video} onPresetPicked={(custom) => setStep(custom ? 1 : 2)} />
-        )}
-        {step == 1 && <VideoStep video={video} />}
-        {step == 2 && <SaveStep video={video} onEditVideo={() => setStep(1)} />}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Box sx={{flex: 1}} />
-        <Button onClick={handleBack} disabled={step == 0}>
-          Back
-        </Button>
-        {step < 2 ? (
-          <Button variant="contained" onClick={handleNext} disabled={!presetChosen}>
-            Next
+                {step == 0 && (
+                  <PurposeStep video={video} onPresetPicked={(custom) => setStep(custom ? 1 : 2)} />
+                )}
+                {step == 1 && <VideoStep video={video} />}
+                {step == 2 && <SaveStep video={video} onEditVideo={() => setStep(1)} />}
+              </motion.div>
+            </AnimatePresence>
+          </AnimatedHeight>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>Cancel</Button>
+          <Box sx={{flex: 1}} />
+          <Button onClick={handleBack} disabled={step == 0}>
+            Back
           </Button>
-        ) : (
-          <Button
-            variant="contained"
-            onClick={handleExport}
-            disabled={!video.exportPath || !video.exportContainerCompatible}
-          >
-            Export video
-          </Button>
-        )}
-      </DialogActions>
+          {step < 2 ? (
+            <Button variant="contained" onClick={handleNext} disabled={!presetChosen}>
+              Next
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              onClick={handleExport}
+              disabled={!video.exportPath || !video.exportContainerCompatible}
+            >
+              Export video
+            </Button>
+          )}
+        </DialogActions>
+      </MotionConfig>
     </Dialog>
   );
 });
@@ -436,28 +599,34 @@ const VideoStep = observer(({video}: {video: VideoEditorStore}) => {
         </CardGrid>
       </Section>
       <Section label="Codec">
-        <CardGrid minWidth={140}>
-          {encoder.codecs.map((c) => {
-            const available = isCodecAvailable(c, hwEncoders);
-            return (
-              <OptionCard
-                key={c}
-                title={codecLabel(c)}
-                description={
-                  available
-                    ? codecDescription(c)
-                    : vendor == "cpu"
-                      ? "Not in this FFmpeg build"
-                      : "Not supported by this GPU"
-                }
-                details={c}
-                selected={codec == c}
-                disabled={!available}
-                onClick={() => edit(() => video.setExportCodec(c))}
-              />
-            );
-          })}
-        </CardGrid>
+        <AnimatedHeight>
+          <CardGrid minWidth={140}>
+            {/* Keyed by family so H.264 & co. stay in place across vendors and only the extras come and go */}
+            <AnimatePresence mode="popLayout" initial={false}>
+              {encoder.codecs.map((c) => {
+                const available = isCodecAvailable(c, hwEncoders);
+                return (
+                  <motion.div key={codecFamily(c)} {...cardPresence}>
+                    <OptionCard
+                      title={codecLabel(c)}
+                      description={
+                        available
+                          ? codecDescription(c)
+                          : vendor == "cpu"
+                            ? "Not in this FFmpeg build"
+                            : "Not supported by this GPU"
+                      }
+                      details={c}
+                      selected={codec == c}
+                      disabled={!available}
+                      onClick={() => edit(() => video.setExportCodec(c))}
+                    />
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </CardGrid>
+        </AnimatedHeight>
       </Section>
       <Section label="Container">
         <ToggleButtonGroup
@@ -507,7 +676,9 @@ const VideoStep = observer(({video}: {video: VideoEditorStore}) => {
           </ToggleButtonGroup>
         </Section>
       </Box>
-      {supportsBitrate(codec) && <BitrateSection video={video} onEdit={edit} />}
+      <Reveal show={supportsBitrate(codec)} gap={2.5}>
+        <BitrateSection video={video} onEdit={edit} />
+      </Reveal>
     </Stack>
   );
 });
@@ -516,6 +687,7 @@ type BitrateMode = "auto" | "bitrate" | "size";
 
 const MIN_SLIDER_KBPS = 500;
 const sliderMaxFor = (kbps: number) => Math.min(MAX_BITRATE_KBPS, Math.max(20000, kbps));
+const formatMbpsValue = (kbps: number) => (kbps / 1000).toFixed(1);
 
 const BitrateSection = observer(
   ({video, onEdit}: {video: VideoEditorStore; onEdit: (change: () => void) => void}) => {
@@ -530,6 +702,12 @@ const BitrateSection = observer(
     // Fixed while dragging so the scale doesn't jump; recalculated when the mode changes
     const [sliderMax, setSliderMax] = useState(() => sliderMaxFor(bitrate));
     const [sizeText, setSizeText] = useState(String(video.exportTargetSizeMb ?? ""));
+    const [bitrateText, setBitrateText] = useState(() => formatMbpsValue(bitrate));
+
+    const setBitrate = (kbps: number) => {
+      setBitrateText(formatMbpsValue(kbps));
+      onEdit(() => video.setExportBitrateKbps(kbps));
+    };
 
     const setTargetSize = (mb: number) => {
       setSizeText(String(mb));
@@ -545,7 +723,7 @@ const BitrateSection = observer(
           Math.max(MIN_SLIDER_KBPS, Math.round(bitrate / 100) * 100),
         );
         setSliderMax(sliderMaxFor(kbps));
-        onEdit(() => video.setExportBitrateKbps(kbps));
+        setBitrate(kbps);
       }
       if (next == "size")
         setTargetSize(
@@ -566,9 +744,28 @@ const BitrateSection = observer(
       if (!sizeValid) setSizeText(String(video.exportTargetSizeMb ?? ""));
     };
 
+    // Rounded to the slider step, so the normalized text on blur matches what's stored
+    const parseKbps = (text: string) => Math.round(parseFloat(text) * 10) * 100;
+    const isKbpsValid = (kbps: number) => kbps >= MIN_SLIDER_KBPS && kbps <= MAX_BITRATE_KBPS;
+    const bitrateValid = isKbpsValid(parseKbps(bitrateText));
+
+    const handleBitrateTextChange = (text: string) => {
+      setBitrateText(text);
+      const kbps = parseKbps(text);
+      if (isKbpsValid(kbps)) onEdit(() => video.setExportBitrateKbps(kbps));
+    };
+
+    // The scale is refitted here rather than per keystroke, so typing "25" via "2" doesn't stretch it for good
+    const handleBitrateBlur = () => {
+      setBitrateText(formatMbpsValue(bitrate));
+      setSliderMax(sliderMaxFor(bitrate));
+    };
+
     let caption: string;
     if (mode == "auto")
       caption = "The encoder picks the bitrate, so the file size can't be predicted";
+    else if (mode == "bitrate" && !bitrateValid)
+      caption = `Enter a bitrate from ${formatMbpsValue(MIN_SLIDER_KBPS)} to ${formatMbpsValue(MAX_BITRATE_KBPS)} Mbit/s`;
     else if (mode == "bitrate") caption = `≈ ${video.estimatedVideoSizeMb} MB`;
     else if (!sizeValid) caption = `Enter a size from 1 to ${MAX_TARGET_SIZE_MB} MB`;
     else if (video.targetSizeUnreachable)
@@ -593,26 +790,46 @@ const BitrateSection = observer(
             File size
           </ToggleButton>
         </ToggleButtonGroup>
-        {/* Both stay mounted so the closing one animates; spacing moves inside to avoid gaps while collapsed */}
-        <Collapse in={mode == "bitrate"} sx={{mt: "0 !important"}}>
-          <Stack direction="row" spacing={2} sx={{alignItems: "center", maxWidth: 560, pt: 1}}>
+        <Reveal show={mode == "bitrate"}>
+          <Stack
+            direction="row"
+            spacing={2}
+            useFlexGap
+            sx={{alignItems: "center", flexWrap: "wrap", rowGap: 1, maxWidth: 560}}
+          >
             <Slider
+              sx={{flex: "1 1 120px"}}
               min={MIN_SLIDER_KBPS}
               max={sliderMax}
               step={100}
               value={Math.min(Math.max(bitrate, MIN_SLIDER_KBPS), sliderMax)}
-              onChange={(_, value) => onEdit(() => video.setExportBitrateKbps(value))}
+              onChange={(_, value) => setBitrate(value)}
             />
-            <Typography variant="body2" sx={{fontFamily: "monospace", whiteSpace: "nowrap"}}>
-              {formatMbps(bitrate)}
-            </Typography>
+            <TextField
+              size="small"
+              type="number"
+              label="Bitrate"
+              value={bitrateText}
+              onChange={(e) => handleBitrateTextChange(e.target.value)}
+              onBlur={handleBitrateBlur}
+              error={!bitrateValid}
+              sx={{width: 150, flexShrink: 0}}
+              slotProps={{
+                htmlInput: {
+                  min: MIN_SLIDER_KBPS / 1000,
+                  max: MAX_BITRATE_KBPS / 1000,
+                  step: 0.1,
+                },
+                input: {endAdornment: <InputAdornment position="end">Mbit/s</InputAdornment>},
+              }}
+            />
           </Stack>
-        </Collapse>
-        <Collapse in={mode == "size"} sx={{mt: "0 !important"}}>
+        </Reveal>
+        <Reveal show={mode == "size"}>
           <Stack
             direction="row"
             spacing={1}
-            sx={{alignItems: "center", flexWrap: "wrap", rowGap: 1, pt: 1}}
+            sx={{alignItems: "center", flexWrap: "wrap", rowGap: 1}}
           >
             <TextField
               size="small"
@@ -638,11 +855,11 @@ const BitrateSection = observer(
               />
             ))}
           </Stack>
-        </Collapse>
+        </Reveal>
         <Typography
           variant="caption"
           color={
-            mode == "size" && !sizeValid
+            (mode == "size" && !sizeValid) || (mode == "bitrate" && !bitrateValid)
               ? "error.main"
               : mode == "size" && video.targetSizeUnreachable
                 ? "warning.main"
@@ -714,10 +931,6 @@ const ResolutionSection = observer(
     if (!lockAspect && source && Math.abs(wn / hn - source.width / source.height) > 0.01)
       warnings.push("Aspect ratio differs from the source, the picture will be stretched");
 
-    // Keeps the last warnings on screen while the Collapse closes, so it animates instead of snapping
-    const shownWarnings = useRef(warnings);
-    if (warnings.length > 0) shownWarnings.current = warnings;
-
     return (
       <Section label="Resolution">
         <CardGrid minWidth={120}>
@@ -752,9 +965,8 @@ const ResolutionSection = observer(
             }}
           />
         </CardGrid>
-        {/* Section's Stack spacing would leave a gap while collapsed, so spacing moves inside */}
-        <Collapse in={customOpen} sx={{mt: "0 !important"}}>
-          <Stack direction="row" spacing={1} sx={{alignItems: "center", pt: 1.5}}>
+        <Reveal show={customOpen} gap={1.5}>
+          <Stack direction="row" spacing={1} sx={{alignItems: "center"}}>
             <TextField
               size="small"
               type="number"
@@ -785,16 +997,16 @@ const ResolutionSection = observer(
               </IconButton>
             </Tooltip>
           </Stack>
-          <Collapse in={warnings.length > 0}>
-            <Stack sx={{pt: 1}}>
-              {shownWarnings.current.map((warning) => (
+          <Reveal show={warnings.length > 0}>
+            <Stack>
+              {warnings.map((warning) => (
                 <Typography key={warning} variant="caption" color="warning.main">
                   {warning}
                 </Typography>
               ))}
             </Stack>
-          </Collapse>
-        </Collapse>
+          </Reveal>
+        </Reveal>
       </Section>
     );
   },
