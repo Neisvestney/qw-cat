@@ -2,4 +2,4 @@
 import type { ExportAudioStreamOptions } from "./ExportAudioStreamOptions";
 import type { GpuAcceleration } from "./GpuAcceleration";
 
-export type ExportOptions = { startTime: number, endTime: number, inputPath: string, outputPath: string, resolution: string | null, bitrate: string | null, videoCodec: string | null, frameRate: number | null, activeAudioStreams: Array<ExportAudioStreamOptions>, gpuAcceleration: GpuAcceleration | null, };
+export type ExportOptions = { startTime: number, endTime: number, inputPath: string, outputPath: string, resolution: string | null, bitrate: string | null, videoCodec: string | null, frameRate: number | null, activeAudioStreams: Array<ExportAudioStreamOptions>, gpuAcceleration: GpuAcceleration | null, audioCodec: string | null, audioBitrate: string | null, mixAudioStreams: boolean, };

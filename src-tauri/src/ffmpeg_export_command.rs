@@ -16,6 +16,10 @@ pub struct ExportOptions {
     pub frame_rate: Option<f64>,
     pub active_audio_streams: Vec<ExportAudioStreamOptions>,
     pub gpu_acceleration: Option<GpuAcceleration>,
+    pub audio_codec: Option<String>,
+    // Used for the mixed track and for the silence written when no stream is active
+    pub audio_bitrate: Option<String>,
+    pub mix_audio_streams: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ts_rs::TS)]
@@ -23,6 +27,8 @@ pub struct ExportOptions {
 pub struct ExportAudioStreamOptions {
     pub index: usize,
     pub gain: f64,
+    // Only applied when the streams are kept separate
+    pub bitrate: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ts_rs::TS)]

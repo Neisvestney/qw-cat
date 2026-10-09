@@ -23,6 +23,9 @@ impl BackgroundCommand for Command {
 pub struct StreamInfo {
     pub index: i32,
     pub codec_name: String,
+    pub channels: Option<u32>,
+    // ffprobe prints it as a string and leaves it out for most mkv streams
+    pub bit_rate: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]

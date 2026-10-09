@@ -148,6 +148,79 @@ export function hasAudio(codec: string | null) {
   return !family || !IMAGE_FAMILIES.includes(family);
 }
 
+export type AudioCodec = "auto" | "aac" | "opus" | "flac";
+type ConcreteAudioCodec = Exclude<AudioCodec, "auto">;
+
+export const AUDIO_CODECS: AudioCodec[] = ["auto", "aac", "opus", "flac"];
+
+const AUDIO_CODEC_LABELS: Record<AudioCodec, string> = {
+  auto: "Auto",
+  aac: "AAC",
+  opus: "Opus",
+  flac: "FLAC",
+};
+
+const AUDIO_CODEC_DESCRIPTIONS: Record<ConcreteAudioCodec, string> = {
+  aac: "Plays everywhere",
+  opus: "Best quality per kbps",
+  flac: "Lossless, large files",
+};
+
+const AUDIO_ENCODERS: Record<ConcreteAudioCodec, string> = {
+  aac: "aac",
+  opus: "libopus",
+  flac: "flac",
+};
+
+// Same rule as CONTAINER_CODECS: containers missing here are left to ffmpeg
+const CONTAINER_AUDIO_CODECS: Record<string, ConcreteAudioCodec[]> = {
+  mp4: ["aac", "opus", "flac"],
+  m4v: ["aac"],
+  mov: ["aac"],
+  mkv: ["aac", "opus", "flac"],
+  webm: ["opus"],
+};
+
+// null means ffmpeg picks the container's default, AAC would break mpg and friends
+export function resolveAudioCodec(codec: AudioCodec, container: string): ConcreteAudioCodec | null {
+  if (codec != "auto") return codec;
+  if (container == "webm") return "opus";
+  return CONTAINER_AUDIO_CODECS[container] ? "aac" : null;
+}
+
+export function isAudioCodecCompatible(container: string, codec: AudioCodec) {
+  const supported = CONTAINER_AUDIO_CODECS[container];
+  const resolved = resolveAudioCodec(codec, container);
+  return !supported || !resolved || supported.includes(resolved);
+}
+
+export function audioCodecLabel(codec: AudioCodec) {
+  return AUDIO_CODEC_LABELS[codec];
+}
+
+export function resolvedAudioCodecLabel(codec: AudioCodec, container: string) {
+  const resolved = resolveAudioCodec(codec, container);
+  return resolved ? AUDIO_CODEC_LABELS[resolved] : "FFmpeg default";
+}
+
+export function audioCodecDescription(codec: AudioCodec, container: string) {
+  const resolved = resolveAudioCodec(codec, container);
+  if (!resolved) return `FFmpeg picks the default codec for ${container}`;
+  const description = AUDIO_CODEC_DESCRIPTIONS[resolved];
+  return codec == "auto"
+    ? `${AUDIO_CODEC_LABELS[resolved]} for ${container} · ${description}`
+    : description;
+}
+
+export function audioEncoder(codec: AudioCodec, container: string) {
+  const resolved = resolveAudioCodec(codec, container);
+  return resolved ? AUDIO_ENCODERS[resolved] : null;
+}
+
+export function isLosslessAudio(codec: AudioCodec) {
+  return codec == "flac";
+}
+
 // GIF ignores -b:v, WebP and ProRes are quality-driven
 export function supportsBitrate(codec: string | null) {
   const family = codecFamily(codec);
@@ -345,6 +418,22 @@ export function widthForHeight(source: VideoStreamInfo | null, height: number) {
 export const STANDARD_SHORT_SIDES = [1080, 720, 480];
 export const STANDARD_FRAME_RATES = [60, 30, 24];
 export const AUDIO_BITRATE_KBPS = 128;
+export const AUDIO_BITRATES_KBPS = [32, 48, 64, 96, 128, 160, 192, 256, 320];
+// Rough FLAC average, only used to budget the video bitrate for a target size
+export const LOSSLESS_KBPS_PER_CHANNEL = 400;
+
+export function parseSourceBitrateKbps(bitRate: string | null) {
+  const bps = Number(bitRate);
+  return bitRate && bps > 0 ? Math.round(bps / 1000) : null;
+}
+
+// Re-encoding above the source bitrate only grows the file
+export function defaultAudioBitrateKbps(channels: number | null, sourceKbps: number | null) {
+  const base = (channels ?? 2) > 2 ? 256 : AUDIO_BITRATE_KBPS;
+  if (sourceKbps == null || sourceKbps >= base) return base;
+  const lower = AUDIO_BITRATES_KBPS.filter((kbps) => kbps <= sourceKbps);
+  return lower.length ? lower[lower.length - 1] : AUDIO_BITRATES_KBPS[0];
+}
 export const MAX_BITRATE_KBPS = 50000;
 export const MAX_TARGET_SIZE_MB = 10000;
 export const TARGET_SIZE_CHIPS_MB = [10, 50, 100, 500];

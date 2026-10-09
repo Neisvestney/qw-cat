@@ -24,6 +24,7 @@ import {
   FormControlLabel,
   IconButton,
   InputAdornment,
+  MenuItem,
   Slider,
   Stack,
   Step,
@@ -55,6 +56,10 @@ import LinkOffIcon from "@mui/icons-material/LinkOff";
 import {AppStateStoreContext} from "../stores/AppStateStore.ts";
 import VideoEditorStore from "../stores/VideoEditorStore.ts";
 import {
+  AUDIO_BITRATES_KBPS,
+  AUDIO_CODECS,
+  audioCodecDescription,
+  audioCodecLabel,
   codecDescription,
   codecFamily,
   codecLabel,
@@ -69,9 +74,12 @@ import {
   hasAudio,
   hasGpuEncoder,
   heightForWidth,
+  isAudioCodecCompatible,
+  isLosslessAudio,
   isCodecAvailable,
   isContainerCompatible,
   isVendorAvailable,
+  resolvedAudioCodecLabel,
   resolvePresetCodec,
   scaledResolution,
   STANDARD_FRAME_RATES,
@@ -366,6 +374,7 @@ const ExportWizardDialog = observer(({open, onClose}: {open: boolean; onClose: (
       onClose={onClose}
       maxWidth={"md"}
       fullWidth
+      sx={{zIndex: 1455}}
       // Reset once hidden, so reopening doesn't animate from the last step
       slotProps={{transition: {onExited: () => setStepState([0, 1])}}}
     >
@@ -1012,6 +1021,225 @@ const ResolutionSection = observer(
   },
 );
 
+const formatChannels = (channels: number | null) =>
+  channels == null
+    ? null
+    : (({1: "mono", 2: "stereo", 6: "5.1", 8: "7.1"} as Record<number, string>)[channels] ??
+      `${channels} ch`);
+
+const AudioBitrateSelect = observer(
+  ({
+    value,
+    sourceKbps,
+    lossless,
+    disabled,
+    onChange,
+  }: {
+    value: number;
+    sourceKbps: number | null;
+    lossless: boolean;
+    disabled?: boolean;
+    onChange: (kbps: number) => void;
+  }) => (
+    <TextField
+      select
+      size="small"
+      value={lossless ? "lossless" : value}
+      disabled={disabled || lossless}
+      onChange={(e) => onChange(Number(e.target.value))}
+      sx={{minWidth: 120}}
+      slotProps={{
+        select: {
+          renderValue: (v) => (v == "lossless" ? "Lossless" : `${String(v)} kbps`),
+          // The wizard dialog sits above MUI's default modal layer
+          MenuProps: {sx: {zIndex: 1456}},
+        },
+      }}
+    >
+      {lossless ? (
+        <MenuItem value="lossless">Lossless</MenuItem>
+      ) : (
+        AUDIO_BITRATES_KBPS.map((kbps) => (
+          <MenuItem key={kbps} value={kbps}>
+            {kbps} kbps
+            {sourceKbps != null && kbps > sourceKbps && (
+              <Typography component="span" variant="caption" color="text.disabled" sx={{ml: 1}}>
+                above source
+              </Typography>
+            )}
+          </MenuItem>
+        ))
+      )}
+    </TextField>
+  ),
+);
+
+const AudioSection = observer(({video}: {video: VideoEditorStore}) => {
+  const [expanded, setExpanded] = useState(video.exportPreset == "custom");
+  const codec = video.exportVideoEncoder;
+  const container = video.exportFormat;
+  const audioCodec = video.exportAudioCodec;
+  const lossless = isLosslessAudio(audioCodec);
+  const multiple = video.audioStreams.length > 1;
+  const separate = multiple && !video.exportMixAudio;
+
+  const edit = (change: () => void) => {
+    change();
+    if (video.exportPreset != null) video.setExportPreset("custom");
+  };
+
+  if (!hasAudio(codec))
+    return (
+      <Section label="Audio">
+        <Typography variant="body2" color="text.secondary">
+          {codecLabel(codec ?? "")} has no sound, audio tracks are skipped.
+        </Typography>
+      </Section>
+    );
+
+  if (video.audioStreams.length == 0)
+    return (
+      <Section label="Audio">
+        <Typography variant="body2" color="text.secondary">
+          This video has no audio tracks.
+        </Typography>
+      </Section>
+    );
+
+  const activeBitrates = video.activeAudioStreams.map((s) => s.bitrateKbps);
+  const bitrateSummary = lossless
+    ? "lossless"
+    : separate && activeBitrates.length
+      ? `${activeBitrates.join(" + ")} kbps`
+      : `${video.exportAudioBitrateKbps} kbps`;
+  const summary = [
+    resolvedAudioCodecLabel(audioCodec, container),
+    bitrateSummary,
+    multiple && (separate ? "separate tracks" : "mixed into one"),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <Section label="Audio">
+      <Reveal show={!expanded}>
+        <Typography variant="body2" sx={{fontFamily: "monospace"}}>
+          {summary}
+          <Button size="small" sx={{ml: 1, minWidth: 0, py: 0}} onClick={() => setExpanded(true)}>
+            Change
+          </Button>
+        </Typography>
+      </Reveal>
+      <Reveal show={expanded}>
+        <Stack spacing={1.5}>
+          <Stack spacing={0.5}>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={audioCodec}
+              onChange={(_, value) => value && edit(() => video.setExportAudioCodec(value))}
+            >
+              {AUDIO_CODECS.map((c) => (
+                <ToggleButton
+                  key={c}
+                  value={c}
+                  disabled={!isAudioCodecCompatible(container, c)}
+                  sx={{px: 2}}
+                >
+                  {audioCodecLabel(c)}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+            <Typography variant="caption" color="text.secondary">
+              <FadeText text={audioCodecDescription(audioCodec, container)} />
+            </Typography>
+          </Stack>
+          {multiple && (
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={video.exportMixAudio}
+              onChange={(_, value) => value != null && edit(() => video.setExportMixAudio(value))}
+            >
+              <ToggleButton value={true} sx={{px: 2}}>
+                Mix into one
+              </ToggleButton>
+              <ToggleButton value={false} sx={{px: 2}}>
+                Keep separate
+              </ToggleButton>
+            </ToggleButtonGroup>
+          )}
+          <Reveal show={!separate} gap={1.5}>
+            <Stack direction="row" spacing={1.5} sx={{alignItems: "center"}}>
+              <Typography variant="body2" color="text.secondary">
+                Bitrate
+              </Typography>
+              <AudioBitrateSelect
+                value={video.exportAudioBitrateKbps}
+                sourceKbps={null}
+                lossless={lossless}
+                onChange={(kbps) => edit(() => video.setExportAudioBitrateKbps(kbps))}
+              />
+            </Stack>
+          </Reveal>
+        </Stack>
+      </Reveal>
+      {video.audioStreams.map((audioStream, index) => (
+        <Stack
+          key={audioStream.streamIndex}
+          direction="row"
+          spacing={1}
+          // Matches the select's height so rows don't jump when it appears
+          sx={{alignItems: "center", justifyContent: "space-between", minHeight: 40}}
+        >
+          <FormControlLabel
+            control={
+              <Switch
+                checked={audioStream.active}
+                onChange={() => video.toggleAudioStream(audioStream.streamIndex)}
+              />
+            }
+            label={
+              <>
+                Audio stream #{index + 1}
+                <Typography
+                  component="span"
+                  variant="caption"
+                  color="text.disabled"
+                  sx={{ml: 1, fontFamily: "monospace"}}
+                >
+                  {[
+                    audioStream.codecName,
+                    formatChannels(audioStream.channels),
+                    audioStream.sourceBitrateKbps && `${audioStream.sourceBitrateKbps} kbps`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </Typography>
+              </>
+            }
+          />
+          <AnimatePresence initial={false}>
+            {expanded && separate && (
+              <motion.div key="bitrate" {...cardPresence}>
+                <AudioBitrateSelect
+                  value={audioStream.bitrateKbps}
+                  sourceKbps={audioStream.sourceBitrateKbps}
+                  lossless={lossless}
+                  disabled={!audioStream.active}
+                  onChange={(kbps) =>
+                    edit(() => video.setAudioStreamBitrate(audioStream.streamIndex, kbps))
+                  }
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </Stack>
+      ))}
+    </Section>
+  );
+});
+
 const SaveStep = observer(
   ({video, onEditVideo}: {video: VideoEditorStore; onEditVideo: () => void}) => {
     const preset = findExportPreset(video.exportPreset);
@@ -1062,31 +1290,7 @@ const SaveStep = observer(
 
     return (
       <Stack spacing={2.5}>
-        <Section label="Audio tracks">
-          {!hasAudio(codec) && (
-            <Typography variant="body2" color="text.secondary">
-              {codecLabel(codec ?? "")} has no sound, audio tracks are skipped.
-            </Typography>
-          )}
-          {hasAudio(codec) && video.audioStreams.length == 0 && (
-            <Typography variant="body2" color="text.secondary">
-              This video has no audio tracks.
-            </Typography>
-          )}
-          {hasAudio(codec) &&
-            video.audioStreams.map((audioStream, index) => (
-              <FormControlLabel
-                key={audioStream.streamIndex}
-                control={
-                  <Switch
-                    checked={audioStream.active}
-                    onChange={() => video.toggleAudioStream(audioStream.streamIndex)}
-                  />
-                }
-                label={`Audio stream #${index + 1}`}
-              />
-            ))}
-        </Section>
+        <AudioSection video={video} />
         <Section label="Save to">
           <TextField
             required

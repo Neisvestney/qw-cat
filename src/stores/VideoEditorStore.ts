@@ -11,13 +11,20 @@ import AppStateStore from "./AppStateStore.ts";
 import {VideoStreamInfo} from "../generated/bindings/VideoStreamInfo.ts";
 import {
   AUDIO_BITRATE_KBPS,
+  AudioCodec,
+  audioEncoder,
+  defaultAudioBitrateKbps,
   encoderVendor,
   ExportPreset,
   ExportPresetId,
   firstCompatibleContainer,
   hasAudio,
+  isAudioCodecCompatible,
   isContainerCompatible,
+  isLosslessAudio,
+  LOSSLESS_KBPS_PER_CHANNEL,
   MAX_BITRATE_KBPS,
+  parseSourceBitrateKbps,
   resolvePresetCodec,
   scaledResolution,
   supportsBitrate,
@@ -28,6 +35,10 @@ export interface AudioStream {
   active: boolean;
   gain: number;
   path: string | null;
+  codecName: string;
+  channels: number | null;
+  sourceBitrateKbps: number | null;
+  bitrateKbps: number;
 }
 
 type Nullable<T> = {
@@ -159,6 +170,15 @@ class VideoEditorStore {
     }
   }
 
+  setAudioStreamBitrate(streamIndex: number, bitrateKbps: number) {
+    const stream = this.audioStreams.find((x) => x.streamIndex == streamIndex);
+    if (stream) stream.bitrateKbps = bitrateKbps;
+  }
+
+  get activeAudioStreams() {
+    return this.audioStreams.filter((x) => x.active);
+  }
+
   handleVideoPlayerError(error: ErrorEvent) {
     this.videoPlayerError = error;
   }
@@ -208,7 +228,15 @@ class VideoEditorStore {
   }
 
   get audioBitrateKbps() {
-    return hasAudio(this.exportVideoEncoder) ? AUDIO_BITRATE_KBPS : 0;
+    if (!hasAudio(this.exportVideoEncoder)) return 0;
+    const streams = this.activeAudioStreams;
+    const lossless = isLosslessAudio(this.exportAudioCodec);
+    const losslessKbps = (s: AudioStream) => (s.channels ?? 2) * LOSSLESS_KBPS_PER_CHANNEL;
+    if (this.exportMixAudio || streams.length == 0) {
+      if (!lossless) return this.exportAudioBitrateKbps;
+      return Math.max(2 * LOSSLESS_KBPS_PER_CHANNEL, ...streams.map(losslessKbps));
+    }
+    return streams.reduce((sum, s) => sum + (lossless ? losslessKbps(s) : s.bitrateKbps), 0);
   }
 
   get rawTargetSizeBitrateKbps() {
@@ -252,6 +280,7 @@ class VideoEditorStore {
     const fileName = path.split(/[\\/]/).pop() ?? "";
     const dotIndex = fileName.lastIndexOf(".");
     this.exportFormat = dotIndex > 0 ? fileName.slice(dotIndex + 1).toLowerCase() : "";
+    this.resetIncompatibleAudioCodec();
   }
 
   exportFormat = "";
@@ -280,6 +309,30 @@ class VideoEditorStore {
   setExportFormat(format: string) {
     this.exportFormat = format;
     this.exportPath = replaceExtension(this.exportPath, this.exportFormat);
+    this.resetIncompatibleAudioCodec();
+  }
+
+  exportAudioCodec: AudioCodec = "auto";
+
+  setExportAudioCodec(codec: AudioCodec) {
+    this.exportAudioCodec = codec;
+  }
+
+  private resetIncompatibleAudioCodec() {
+    if (!isAudioCodecCompatible(this.exportFormat, this.exportAudioCodec))
+      this.exportAudioCodec = "auto";
+  }
+
+  exportMixAudio = true;
+
+  setExportMixAudio(mix: boolean) {
+    this.exportMixAudio = mix;
+  }
+
+  exportAudioBitrateKbps = AUDIO_BITRATE_KBPS;
+
+  setExportAudioBitrateKbps(bitrateKbps: number) {
+    this.exportAudioBitrateKbps = bitrateKbps;
   }
 
   // null keeps the source resolution
@@ -338,12 +391,14 @@ class VideoEditorStore {
         frameRate: this.exportFrameRate,
         videoCodec: this.exportVideoEncoder,
         gpuAcceleration: this.exportGpuAcceleration,
-        activeAudioStreams: this.audioStreams
-          .filter((x) => x.active)
-          .map((x) => ({
-            index: x.streamIndex,
-            gain: gainToGainValue(x.gain),
-          })),
+        activeAudioStreams: this.activeAudioStreams.map((x) => ({
+          index: x.streamIndex,
+          gain: gainToGainValue(x.gain),
+          bitrate: `${x.bitrateKbps}k`,
+        })),
+        audioCodec: audioEncoder(this.exportAudioCodec, this.exportFormat),
+        audioBitrate: `${this.exportAudioBitrateKbps}k`,
+        mixAudioStreams: this.exportMixAudio,
       },
     });
   }
@@ -360,12 +415,19 @@ class VideoEditorStore {
 
     this.path = path;
     this.sourceVideo = sourceVideo;
-    this.audioStreams = videoAudioStreamsInfo.audioStreams.map((x) => ({
-      streamIndex: x.index,
-      active: true,
-      gain: 100,
-      path: null,
-    }));
+    this.audioStreams = videoAudioStreamsInfo.audioStreams.map((x) => {
+      const sourceBitrateKbps = parseSourceBitrateKbps(x.bit_rate);
+      return {
+        streamIndex: x.index,
+        active: true,
+        gain: 100,
+        path: null,
+        codecName: x.codec_name,
+        channels: x.channels,
+        sourceBitrateKbps,
+        bitrateKbps: defaultAudioBitrateKbps(x.channels, sourceBitrateKbps),
+      };
+    });
     this.duration = null;
     this.trimStart = null;
     this.trimEnd = null;

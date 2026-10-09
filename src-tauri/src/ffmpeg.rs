@@ -368,30 +368,44 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                         }
                         video_filter.push_str("[v]");
 
-                        let audio_filter = if !options.active_audio_streams.is_empty() {
-                            let audio_streams_trim = options
-                                .active_audio_streams
-                                .iter()
-                                .map(|stream| format!("[0:{}]volume={},asetpts=PTS-STARTPTS[a{}];", stream.index, stream.gain, stream.index))
-                                .collect::<Vec<_>>()
-                                .join("");
+                        let audio_streams = &options.active_audio_streams;
+                        let separate_audio = !options.mix_audio_streams && !audio_streams.is_empty();
 
-                            let audio_streams = options
-                                .active_audio_streams
-                                .iter()
-                                .map(|stream| format!("[a{}]", stream.index))
-                                .collect::<Vec<_>>()
-                                .join("");
+                        // libopus rejects 5.1(side) and other non-standard layouts, so remap them to the nearest standard one
+                        let audio_format = if options.audio_codec.as_deref() == Some("libopus") {
+                            ",aformat=channel_layouts=7.1|5.1|stereo|mono"
+                        } else {
+                            ""
+                        };
 
-                            format!(
-                                "{}{}amix=inputs={}[a]",
-                                audio_streams_trim,
-                                audio_streams,
-                                options.active_audio_streams.len()
-                            )
+                        let audio_streams_trim = audio_streams
+                            .iter()
+                            .map(|stream| {
+                                format!(
+                                    "[0:{}]volume={},asetpts=PTS-STARTPTS{}[a{}]",
+                                    stream.index, stream.gain, audio_format, stream.index
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join(";");
+
+                        let audio_filter = if separate_audio {
+                            audio_streams_trim
+                        } else if !audio_streams.is_empty() {
+                            let audio_streams_labels = audio_streams.iter().map(|stream| format!("[a{}]", stream.index)).collect::<String>();
+                            format!("{};{}amix=inputs={}[a]", audio_streams_trim, audio_streams_labels, audio_streams.len())
                         } else {
                             // Generate silence
                             format!("aevalsrc=0:d={}[a]", options.end_time - options.start_time)
+                        };
+
+                        let audio_outputs: Vec<(String, Option<&String>)> = if separate_audio {
+                            audio_streams
+                                .iter()
+                                .map(|stream| (format!("[a{}]", stream.index), stream.bitrate.as_ref()))
+                                .collect()
+                        } else {
+                            vec![("[a]".to_string(), options.audio_bitrate.as_ref())]
                         };
 
                         let mut ffmpeg_command = FfmpegCommand::new_with_path(ffmpeg_path());
@@ -406,10 +420,22 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
 
                         ffmpeg_command.input(&options.input_path).overwrite();
                         if has_audio {
-                            ffmpeg_command
-                                .filter_complex(format!("{};{}", video_filter, audio_filter))
-                                .map("[v]")
-                                .map("[a]");
+                            ffmpeg_command.filter_complex(format!("{};{}", video_filter, audio_filter)).map("[v]");
+                            for (label, _) in &audio_outputs {
+                                ffmpeg_command.map(label);
+                            }
+
+                            if let Some(audio_codec) = &options.audio_codec {
+                                ffmpeg_command.codec_audio(audio_codec);
+                            }
+                            // FLAC is lossless and ignores -b:a
+                            if options.audio_codec.as_deref() != Some("flac") {
+                                for (output_index, (_, bitrate)) in audio_outputs.iter().enumerate() {
+                                    if let Some(bitrate) = bitrate {
+                                        ffmpeg_command.arg(format!("-b:a:{output_index}")).arg(bitrate);
+                                    }
+                                }
+                            }
                         } else {
                             ffmpeg_command.filter_complex(video_filter).map("[v]");
                         }
