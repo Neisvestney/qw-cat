@@ -20,6 +20,7 @@ mod temp_cleanup;
 use crate::custom_export_presets::{get_custom_export_presets, save_custom_export_presets};
 use crate::ffmpeg::{create_ffmpeg_tasks_queue, emit_ffmpeg_queue_status};
 use crate::ffmpeg_export_command::{cancel_ffmpeg_task_by_index, ffmpeg_export};
+use crate::ffmpeg_path::init_sidecar_dir;
 use crate::ffmpeg_settings::{get_ffmpeg_settings, init_ffmpeg_source, load_ffmpeg_settings, set_ffmpeg_settings};
 use crate::handle_cli_args::handle_cli_args_on_frontend_initialized;
 #[cfg(target_os = "macos")]
@@ -60,6 +61,7 @@ pub fn run() {
         .setup(|app| {
             APP_HANDLE.set(app.handle().clone()).unwrap();
             init_media_cache_dir(app.handle())?;
+            init_sidecar_dir(app.handle())?;
 
             let main_window = app.get_webview_window("main").unwrap();
             main_window.on_window_event(handle_main_window_event);

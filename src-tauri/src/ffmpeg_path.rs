@@ -1,8 +1,12 @@
 use crate::ffmpeg_settings::{FfmpegSource, current_ffmpeg_settings};
+use crate::ffmpeg_download::remove_stale_downloads;
 use crate::ffprobe::BackgroundCommand;
-use anyhow::Context;
+use log::{info, warn};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
+use tauri::{AppHandle, Manager};
 
 pub fn ffmpeg_path() -> PathBuf {
     let settings = current_ffmpeg_settings();
@@ -24,31 +28,75 @@ fn executable_name(name: &str) -> PathBuf {
 
 fn binary_path(name: &str, source: Option<FfmpegSource>, custom_dir: Option<&str>) -> PathBuf {
     let system = PathBuf::from(name);
-    let downloaded = sidecar_dir().map(|dir| dir.join(executable_name(name)));
+    let downloaded = sidecar_dir().join(executable_name(name));
 
     match source {
-        Some(FfmpegSource::Downloaded) => downloaded.unwrap_or(system),
+        Some(FfmpegSource::Downloaded) => downloaded,
         Some(FfmpegSource::System) => system,
         Some(FfmpegSource::Custom) => match custom_dir {
             Some(dir) => Path::new(dir).join(executable_name(name)),
             None => system,
         },
         // Not chosen yet: whatever is there
-        None => match downloaded {
-            Ok(path) if path.exists() => path,
-            _ => system,
-        },
+        None => {
+            if downloaded.exists() {
+                downloaded
+            } else {
+                system
+            }
+        }
     }
 }
 
+// Not "ffmpeg": on Linux and macOS the legacy binary sits at exactly that path inside app_local_data_dir
+const SIDECAR_DIR_NAME: &str = "bin";
+
+static SIDECAR_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+pub fn init_sidecar_dir(app_handle: &AppHandle) -> tauri::Result<()> {
+    let dir = app_handle.path().app_local_data_dir()?.join(SIDECAR_DIR_NAME);
+    migrate_legacy_sidecars(&dir);
+    SIDECAR_DIR.set(dir).expect("sidecar dir initialized twice");
+    Ok(())
+}
+
+pub fn sidecar_dir() -> &'static Path {
+    SIDECAR_DIR.get().expect("sidecar dir is not initialized")
+}
+
+// Older versions downloaded into the Windows install dir, which the uninstaller never cleans up
 #[cfg(windows)]
-const APP_DIRECTORY: &str = "Qw Cat";
+const LEGACY_APP_DIRECTORY: &str = "Qw Cat";
 
 #[cfg(not(windows))]
-const APP_DIRECTORY: &str = "io.github.neisvestney.qw-cat";
+const LEGACY_APP_DIRECTORY: &str = "io.github.neisvestney.qw-cat";
 
-pub fn sidecar_dir() -> anyhow::Result<PathBuf> {
-    Ok(dirs::data_local_dir().context("Can't get data_local_dir")?.join(APP_DIRECTORY))
+fn migrate_legacy_sidecars(dir: &Path) {
+    let Some(legacy_dir) = dirs::data_local_dir().map(|d| d.join(LEGACY_APP_DIRECTORY)) else {
+        return;
+    };
+    remove_stale_downloads(&legacy_dir);
+
+    for name in ["ffmpeg", "ffprobe"] {
+        let legacy_path = legacy_dir.join(executable_name(name));
+        let new_path = dir.join(executable_name(name));
+        if !legacy_path.is_file() {
+            continue;
+        }
+        // Already re-downloaded, e.g. after a failed move: the legacy copy is just leftover
+        if new_path.exists() {
+            if let Err(e) = fs::remove_file(&legacy_path) {
+                warn!("Failed to remove {:?}: {e}", legacy_path);
+            }
+            continue;
+        }
+
+        let result = fs::create_dir_all(dir).and_then(|_| fs::rename(&legacy_path, &new_path));
+        match result {
+            Ok(()) => info!("Moved {:?} to {:?}", legacy_path, new_path),
+            Err(e) => warn!("Failed to move {:?} to {:?}: {e}", legacy_path, new_path),
+        }
+    }
 }
 
 fn runs(path: &Path) -> bool {

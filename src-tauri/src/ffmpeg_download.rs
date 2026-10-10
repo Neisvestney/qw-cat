@@ -92,7 +92,7 @@ const ARCHIVES: &[PinnedArchive] = &[];
 const DOWNLOAD_PREFIX: &str = ".ffmpeg-download-";
 
 /// Leftovers from a download interrupted by the app being killed.
-fn remove_stale_downloads(dir: &Path) {
+pub fn remove_stale_downloads(dir: &Path) {
     let Ok(entries) = fs::read_dir(dir) else { return };
     for entry in entries.flatten() {
         if entry.file_name().to_string_lossy().starts_with(DOWNLOAD_PREFIX) {
@@ -108,10 +108,10 @@ pub fn download_with_progress(progress_callback: impl Fn(f64)) -> Result<()> {
     }
 
     progress_callback(0.0);
-    let destination = sidecar_dir()?;
+    let destination = sidecar_dir();
     info!("{:?}", destination);
-    fs::create_dir_all(&destination).context("Failed to create directory for ffmpeg download")?;
-    remove_stale_downloads(&destination);
+    fs::create_dir_all(destination).context("Failed to create directory for ffmpeg download")?;
+    remove_stale_downloads(destination);
 
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_connect(Some(Duration::from_secs(30)))
@@ -129,7 +129,7 @@ pub fn download_with_progress(progress_callback: impl Fn(f64)) -> Result<()> {
                 progress_callback((index as f64 + downloaded as f64 / total as f64) / archives_count)
             }
         })
-        .and_then(|file| extract_binaries(file, archive.binaries, &destination));
+        .and_then(|file| extract_binaries(file, archive.binaries, destination));
         let _ = fs::remove_file(&archive_path);
         result?;
     }
