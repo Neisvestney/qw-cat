@@ -1,5 +1,5 @@
-use crate::ffmpeg_settings::{FfmpegSource, current_ffmpeg_settings};
 use crate::ffmpeg_download::remove_stale_downloads;
+use crate::ffmpeg_settings::{FfmpegSource, current_ffmpeg_settings};
 use crate::ffprobe::BackgroundCommand;
 use log::{info, warn};
 use std::fs;
