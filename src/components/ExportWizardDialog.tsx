@@ -56,6 +56,7 @@ import BookmarkIcon from "@mui/icons-material/Bookmark";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import LinkIcon from "@mui/icons-material/Link";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
+import {pathExists} from "../generated";
 import {AppStateStoreContext} from "../stores/AppStateStore.ts";
 import VideoEditorStore from "../stores/VideoEditorStore.ts";
 import {
@@ -230,14 +231,19 @@ const CardGrid = observer(
   ),
 );
 
-const Section = observer(({label, children}: {label: string; children: React.ReactNode}) => (
-  <Stack spacing={1}>
-    <Typography variant="overline" color="text.secondary" sx={{lineHeight: 1.5}}>
-      {label}
-    </Typography>
-    {children}
-  </Stack>
-));
+const Section = observer(
+  ({label, hint, children}: {label: string; hint?: React.ReactNode; children: React.ReactNode}) => (
+    <Stack spacing={1}>
+      <Stack direction="row" spacing={1.5} sx={{alignItems: "baseline", flexWrap: "wrap"}}>
+        <Typography variant="overline" color="text.secondary" sx={{lineHeight: 1.5}}>
+          {label}
+        </Typography>
+        {hint}
+      </Stack>
+      {children}
+    </Stack>
+  ),
+);
 
 const TRANSITION: Transition = {duration: 0.25, ease: [0.4, 0, 0.2, 1]};
 
@@ -1411,6 +1417,24 @@ const SaveStep = observer(
     const codec = video.exportVideoEncoder;
     const source = video.sourceVideo;
     const [savingPreset, setSavingPreset] = useState(false);
+    const [existingPath, setExistingPath] = useState<string | null>(null);
+    // Compared with the current path, so a result for an older path never shows
+    const pathTaken = !!video.exportPath && existingPath == video.exportPath;
+
+    useEffect(() => {
+      const path = video.exportPath;
+      if (!path) return;
+      let stale = false;
+      const timeout = setTimeout(() => {
+        pathExists({path})
+          .then((exists) => !stale && setExistingPath(exists ? path : null))
+          .catch(() => !stale && setExistingPath(null));
+      }, 300);
+      return () => {
+        stale = true;
+        clearTimeout(timeout);
+      };
+    }, [video.exportPath]);
 
     const handleSavePreset = (name: string) => {
       const custom = video.toCustomExportPreset(name);
@@ -1479,17 +1503,29 @@ const SaveStep = observer(
     return (
       <Stack spacing={2.5}>
         <AudioSection video={video} />
-        <Section label="Save to">
+        <Section
+          label="Save to"
+          hint={
+            !video.exportContainerCompatible ? (
+              <Typography variant="caption" color="error.main" sx={{lineHeight: 1.5}}>
+                {`${video.exportFormat} can't hold ${codecLabel(video.exportVideoEncoder ?? "")} video. Change the file extension or pick another codec on the Video step.`}
+              </Typography>
+            ) : (
+              pathTaken && (
+                // Same line height as the overline, so the header row doesn't grow when it appears
+                <Typography variant="caption" color="warning.main" sx={{lineHeight: 1.5}}>
+                  This file already exists and will be overwritten
+                </Typography>
+              )
+            )
+          }
+        >
           <TextField
             required
             fullWidth
             value={video.exportPath}
             onChange={(e) => video.setExportPath(e.target.value)}
             error={!video.exportContainerCompatible}
-            helperText={
-              !video.exportContainerCompatible &&
-              `${video.exportFormat} can't hold ${codecLabel(video.exportVideoEncoder ?? "")} video. Change the file extension or pick another codec on the Video step.`
-            }
             slotProps={{
               input: {
                 endAdornment: (

@@ -12,6 +12,7 @@ mod hw_encoders;
 mod integrated_server;
 mod logs_store;
 mod open_devtools_command;
+mod path_exists_command;
 mod playback_copy_command;
 mod recent_videos;
 mod select_new_video_file_command;
@@ -30,6 +31,7 @@ use crate::hw_encoders::{detect_hw_encoders, get_gpu_vendors};
 use crate::integrated_server::{IntegratedServerState, get_integrated_server_state, start_integrated_server};
 use crate::logs_store::{LogsStore, get_logs, get_logs_store_target};
 use crate::open_devtools_command::open_devtools;
+use crate::path_exists_command::path_exists;
 use crate::playback_copy_command::prepare_playback_copy;
 use crate::recent_videos::{get_recent_videos, open_recent_video, remove_recent_video};
 use crate::select_new_video_file_command::select_new_video_file;
@@ -105,6 +107,7 @@ pub fn run() {
             prepare_playback_copy,
             get_ffmpeg_settings,
             set_ffmpeg_settings,
+            path_exists,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
