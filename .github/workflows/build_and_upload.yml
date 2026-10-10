@@ -4,6 +4,10 @@ on:
   push:
     tags: [ 'v*' ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   create-release:
     permissions:
@@ -131,6 +135,8 @@ jobs:
         with:
           # Pointing to the tauri directory for caching
           workspaces: "src-tauri -> target"
+          # Both macOS targets build on the same runner OS/arch, so without this they share one cache key
+          key: ${{ matrix.args }}
 
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -209,7 +215,6 @@ jobs:
         with:
           bundle: qw-cat-${{ github.ref_name }}-${{ matrix.arch }}.flatpak
           manifest-path: ./src-tauri/bundle/generated/io.github.neisvestney.qw-cat.yml
-          cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.arch }}
           verbose: true
 
@@ -243,4 +248,27 @@ jobs:
               draft: false,
               prerelease: isPrerelease,
               make_latest: isPrerelease ? "false" : "true"
+            })
+
+  # Hide a half-built release instead of deleting it, so "Re-run failed jobs" can still upload to it
+  revert-failed-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    needs: [ create-release, build-tauri, expose-release, build-and-publish-flatpak, publish-release ]
+    if: failure() && needs.create-release.outputs.release_id != ''
+
+    steps:
+      - name: Revert release to draft
+        uses: actions/github-script@v7
+        env:
+          release_id: ${{ needs.create-release.outputs.release_id }}
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: process.env.release_id,
+              draft: true,
+              prerelease: true
             })
