@@ -3538,6 +3538,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_repr",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -3551,6 +3552,7 @@ dependencies = [
  "tracing",
  "ts-rs",
  "ureq",
+ "zip",
 ]
 
 [[package]]

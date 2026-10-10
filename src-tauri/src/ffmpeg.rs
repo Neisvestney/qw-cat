@@ -1,6 +1,6 @@
 use crate::ffmpeg_download::download_with_progress;
 use crate::ffmpeg_export_command::{ExportOptions, GpuAcceleration};
-use crate::ffmpeg_path::{ffmpeg_is_installed, ffmpeg_path};
+use crate::ffmpeg_path::{ffmpeg_is_installed, ffmpeg_path, ffprobe_is_installed};
 use crate::ffmpeg_time_duration::FfmpegTimeDuration;
 use crate::ffprobe::{get_video_audio_streams_info, get_video_streams_info};
 use crate::select_new_video_file_command::AudioStreamFilePath;
@@ -572,7 +572,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                 let ffmpeg_task_clone = ffmpeg_task.clone();
 
                 let ffmpeg_result = tokio::task::spawn_blocking(move || {
-                    let ffmpeg_is_installed = ffmpeg_is_installed();
+                    let ffmpeg_is_installed = ffmpeg_is_installed() && ffprobe_is_installed();
 
                     info!("FFmpeg is installed: {} (ffmpeg path: {:?})", ffmpeg_is_installed, ffmpeg_path().to_str());
 
