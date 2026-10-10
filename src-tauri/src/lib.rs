@@ -32,7 +32,7 @@ use crate::open_devtools_command::open_devtools;
 use crate::playback_copy_command::prepare_playback_copy;
 use crate::recent_videos::{get_recent_videos, open_recent_video, remove_recent_video};
 use crate::select_new_video_file_command::select_new_video_file;
-use crate::temp_cleanup::cleanup_temp;
+use crate::temp_cleanup::{cleanup_temp, init_media_cache_dir};
 use std::env;
 use std::ops::Deref;
 use std::sync::OnceLock;
@@ -59,6 +59,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             APP_HANDLE.set(app.handle().clone()).unwrap();
+            init_media_cache_dir(app.handle())?;
 
             let main_window = app.get_webview_window("main").unwrap();
             main_window.on_window_event(handle_main_window_event);

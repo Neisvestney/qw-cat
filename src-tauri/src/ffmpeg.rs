@@ -1,3 +1,4 @@
+use crate::APP_HANDLE;
 use crate::ffmpeg_download::download_with_progress;
 use crate::ffmpeg_export_command::{ExportOptions, GpuAcceleration};
 use crate::ffmpeg_path::{ffmpeg_path, source_is_available};
@@ -5,7 +6,7 @@ use crate::ffmpeg_settings::FfmpegSource;
 use crate::ffmpeg_time_duration::FfmpegTimeDuration;
 use crate::ffprobe::{get_video_audio_streams_info, get_video_streams_info};
 use crate::select_new_video_file_command::AudioStreamFilePath;
-use crate::{APP_HANDLE, APP_IDENTIFIER};
+use crate::temp_cleanup::media_cache_dir;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use ffmpeg_sidecar::command::FfmpegCommand;
@@ -205,8 +206,8 @@ pub async fn run_next_task(queue: MutexGuard<'_, Vec<Arc<RwLock<FfmpegTask>>>>) 
 }
 
 fn get_audio_file_path(video_file_path: &str, audio_stream_index: i32, format: &str) -> String {
-    let tmp_folder = std::env::temp_dir().join(APP_IDENTIFIER);
-    std::fs::create_dir_all(&tmp_folder).unwrap();
+    let tmp_folder = media_cache_dir();
+    std::fs::create_dir_all(tmp_folder).unwrap();
     let audio_file_name = format!("audio_{}_{}.{}", BASE64_STANDARD.encode(video_file_path), audio_stream_index, format);
 
     tmp_folder.join(audio_file_name).to_string_lossy().to_string()
@@ -217,8 +218,8 @@ const MP4_COPYABLE_AUDIO_CODECS: [&str; 5] = ["aac", "mp3", "alac", "flac", "opu
 fn get_playback_copy_path(video_file_path: &str, source_metadata: &std::fs::Metadata) -> std::path::PathBuf {
     use std::hash::{DefaultHasher, Hash, Hasher};
 
-    let tmp_folder = std::env::temp_dir().join(APP_IDENTIFIER);
-    std::fs::create_dir_all(&tmp_folder).unwrap();
+    let tmp_folder = media_cache_dir();
+    std::fs::create_dir_all(tmp_folder).unwrap();
     // Size and mtime are part of the key so a replaced source never reuses a stale copy
     let mut hasher = DefaultHasher::new();
     video_file_path.hash(&mut hasher);

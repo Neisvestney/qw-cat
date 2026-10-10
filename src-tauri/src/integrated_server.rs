@@ -1,4 +1,4 @@
-use crate::APP_IDENTIFIER;
+use crate::temp_cleanup::media_cache_dir;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderValue, Request, header};
@@ -165,8 +165,7 @@ pub async fn serve_video(
     let path = match files.contains(&path_buf) {
         true => path_buf,
         false => {
-            let temp_dir = std::env::temp_dir().join(APP_IDENTIFIER);
-            let canonical_temp = match temp_dir.canonicalize() {
+            let canonical_temp = match media_cache_dir().canonicalize() {
                 Ok(p) => p,
                 Err(_) => return StatusCode::NOT_FOUND.into_response(),
             };
