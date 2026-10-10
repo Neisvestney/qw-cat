@@ -14,6 +14,7 @@ import {
   AudioCodec,
   audioEncoder,
   codecFamily,
+  cpuCodecFor,
   DEFAULT_PRESET_AUDIO,
   defaultAudioBitrateKbps,
   encoderVendor,
@@ -23,6 +24,7 @@ import {
   isAudioCodecCompatible,
   isContainerCompatible,
   isLosslessAudio,
+  isVendorOnPlatform,
   LOSSLESS_KBPS_PER_CHANNEL,
   MAX_BITRATE_KBPS,
   parseSourceBitrateKbps,
@@ -424,6 +426,9 @@ class VideoEditorStore {
   exportGpuAcceleration: GpuAcceleration | null = null;
 
   setExportCodec(codec: string) {
+    // A GPU codec of a vendor this OS doesn't have (e.g. VideoToolbox off macOS) falls back to the CPU one
+    if (!isVendorOnPlatform(encoderVendor(codec), this.appStateStore.gpuVendors))
+      codec = cpuCodecFor(codec);
     this.exportVideoEncoder = codec;
     const vendor = encoderVendor(codec);
     this.exportGpuAcceleration = vendor == "cpu" ? null : vendor;

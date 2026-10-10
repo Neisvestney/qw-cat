@@ -7,7 +7,9 @@ import {
   FfmpegSettingsState,
   getCustomExportPresets,
   getFfmpegSettings,
+  getGpuVendors,
   getIntegratedServerState,
+  GpuAcceleration,
   getRecentVideos,
   openRecentVideo,
   RecentVideo,
@@ -55,6 +57,9 @@ class AppStateStore {
   // null until the first detection finishes
   hwEncoders: string[] | null = null;
 
+  // GPU vendors that exist on this OS, null until loaded or when the backend can't tell
+  gpuVendors: GpuAcceleration[] | null = null;
+
   preferGpuEncoding = readStorage(PREFER_GPU_KEY) == "true";
 
   // May point to a deleted custom preset, so it's resolved on use
@@ -92,6 +97,17 @@ class AppStateStore {
         return result.encoders;
       });
     return this.hwEncodersRequest;
+  }
+
+  async loadGpuVendors() {
+    // On failure nothing is filtered and the encoder probe alone decides
+    const vendors = await getGpuVendors().catch((e): null => {
+      console.error("Can't load GPU vendors", e);
+      return null;
+    });
+    runInAction(() => {
+      this.gpuVendors = vendors;
+    });
   }
 
   setPreferGpuEncoding(preferGpu: boolean) {
@@ -237,6 +253,8 @@ class AppStateStore {
       console.error("Can't load custom export presets", e),
     );
     this.loadFfmpegSettings().catch((e) => console.error("Can't load ffmpeg settings", e));
+    // Before frontend-initialized, so a video opened from CLI args already sees every vendor
+    await this.loadGpuVendors();
     await this.subscribeToIntegratedServerEvents(disposer);
     await this.subscribeToVideoSelectionEvent(disposer);
     await this.ffmpegTasksQueue.listenToFfmpegEvents(disposer);

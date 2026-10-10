@@ -1,3 +1,4 @@
+use crate::ffmpeg_export_command::GpuAcceleration;
 use crate::ffmpeg_path::{ffmpeg_is_installed, ffmpeg_path};
 use crate::ffprobe::BackgroundCommand;
 use log::{error, info};
@@ -13,10 +14,11 @@ pub struct HwEncoders {
 
 // Grouped by vendor: vendors are probed in parallel, encoders of one vendor one by one to stay under NVENC session limits.
 // The last group holds CPU encoders that some ffmpeg builds leave out
-const HW_ENCODERS: [&[&str]; 5] = [
+const HW_ENCODERS: &[&[&str]] = &[
     &["h264_nvenc", "hevc_nvenc", "av1_nvenc"],
     &["h264_amf", "hevc_amf", "av1_amf"],
     &["h264_qsv", "hevc_qsv", "av1_qsv", "vp9_qsv"],
+    #[cfg(target_os = "macos")]
     &["h264_videotoolbox", "hevc_videotoolbox", "prores_videotoolbox"],
     &["libsvtav1", "libwebp_anim"],
 ];
@@ -81,6 +83,17 @@ fn probe_all() -> HwEncoders {
         encoders,
         ffmpeg_installed: true,
     }
+}
+
+#[tauri::command]
+pub fn get_gpu_vendors() -> Vec<GpuAcceleration> {
+    vec![
+        GpuAcceleration::Nvidia,
+        GpuAcceleration::Amd,
+        GpuAcceleration::Intel,
+        #[cfg(target_os = "macos")]
+        GpuAcceleration::Apple,
+    ]
 }
 
 #[tauri::command]

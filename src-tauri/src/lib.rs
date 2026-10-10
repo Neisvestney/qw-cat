@@ -25,7 +25,7 @@ use crate::handle_cli_args::handle_cli_args_on_frontend_initialized;
 #[cfg(target_os = "macos")]
 use crate::handle_cli_args::handle_opened_urls;
 use crate::handle_main_window_event::handle_main_window_event;
-use crate::hw_encoders::detect_hw_encoders;
+use crate::hw_encoders::{detect_hw_encoders, get_gpu_vendors};
 use crate::integrated_server::{IntegratedServerState, get_integrated_server_state, start_integrated_server};
 use crate::logs_store::{LogsStore, get_logs, get_logs_store_target};
 use crate::open_devtools_command::open_devtools;
@@ -93,6 +93,7 @@ pub fn run() {
             open_devtools,
             cancel_ffmpeg_task_by_index,
             detect_hw_encoders,
+            get_gpu_vendors,
             get_custom_export_presets,
             save_custom_export_presets,
             get_recent_videos,

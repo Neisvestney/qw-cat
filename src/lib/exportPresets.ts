@@ -30,6 +30,20 @@ export const ENCODERS: EncoderInfo[] = [
   },
 ];
 
+// gpuVendors comes from the backend, e.g. VideoToolbox exists only on macOS; null (not loaded) filters nothing
+export function isVendorOnPlatform(vendor: EncoderVendor, gpuVendors: GpuAcceleration[] | null) {
+  return vendor == "cpu" || !gpuVendors || gpuVendors.includes(vendor);
+}
+
+export function platformEncoders(gpuVendors: GpuAcceleration[] | null) {
+  return ENCODERS.filter((e) => isVendorOnPlatform(e.vendor, gpuVendors));
+}
+
+export function gpuVendorsHint(gpuVendors: GpuAcceleration[] | null) {
+  const labels = GPU_ORDER.filter((v) => isVendorOnPlatform(v, gpuVendors)).map((v) => GPU_SHORT_LABELS[v]);
+  return labels.length > 1 ? `${labels.slice(0, -1).join(", ")} or ${labels[labels.length - 1]}` : labels.join("");
+}
+
 const FAMILY_LABELS: Record<CodecFamily, string> = {
   h264: "H.264",
   hevc: "HEVC",
@@ -96,6 +110,11 @@ export function codecFamily(codec: string | null): CodecFamily | null {
   if (codec == "gif") return "gif";
   if (codec == "libwebp_anim") return "webp";
   return null;
+}
+
+export function cpuCodecFor(codec: string) {
+  const family = codecFamily(codec);
+  return (family && CPU_CODECS[family]) || "libx264";
 }
 
 export function codecLabel(codec: string) {

@@ -73,6 +73,7 @@ import {
   encoderVendor,
   ExportPreset,
   findExportPreset,
+  gpuVendorsHint,
   hasAudio,
   hasGpuEncoder,
   heightForWidth,
@@ -81,6 +82,7 @@ import {
   isCodecAvailable,
   isContainerCompatible,
   isVendorAvailable,
+  platformEncoders,
   resolvedAudioCodecLabel,
   resolvePresetCodec,
   scaledResolution,
@@ -199,12 +201,19 @@ const OptionCardContent = observer(
       )}
       {details && (
         <Typography variant="caption" color="text.disabled" sx={{fontFamily: "monospace"}}>
-          <FadeText text={details} />
+          <FadeText text={keepSegmentsTogether(details)} />
         </Typography>
       )}
     </OptionCardRoot>
   ),
 );
+
+// Wrap only after a "·" separator, never inside a segment like "2.5 Mbit/s"
+const keepSegmentsTogether = (text: string) =>
+  text
+    .split(" · ")
+    .map((s) => s.replace(/ /g, "\u00A0"))
+    .join("\u00A0· ");
 
 const CardGrid = observer(
   ({minWidth = 150, children}: {minWidth?: number; children: React.ReactNode}) => (
@@ -424,15 +433,35 @@ const ExportWizardDialog = observer(({open, onClose}: {open: boolean; onClose: (
               <Step key={label} completed={i < step && !skipped} disabled={i > 0 && !presetChosen}>
                 <StepButton
                   onClick={() => setStep(i)}
+                  // Always rendered to reserve its line, otherwise the stepper grows when a preset gets applied
                   optional={
-                    skipped ? (
-                      <Typography variant="caption" color="text.secondary">
+                    i == 1 && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        component={motion.span}
+                        initial={false}
+                        // Zero width while hidden so the step is only as wide as its label, the height stays reserved
+                        animate={{opacity: skipped ? 1 : 0, width: skipped ? "auto" : 0}}
+                        sx={{display: "block", whiteSpace: "nowrap", overflow: "hidden"}}
+                      >
                         From preset
                       </Typography>
-                    ) : undefined
+                    )
                   }
                 >
-                  {label}
+                  {i == 1 ? (
+                    // Shifted down by half a line to sit centered while the caption is hidden
+                    <motion.span
+                      initial={false}
+                      animate={{y: skipped ? 0 : "50%"}}
+                      style={{display: "inline-block"}}
+                    >
+                      {label}
+                    </motion.span>
+                  ) : (
+                    label
+                  )}
                 </StepButton>
               </Step>
             );
@@ -506,46 +535,48 @@ const PurposeStep = observer(
     return (
       <Stack spacing={2}>
         <Section label="What is this clip for?">
-          <CardGrid minWidth={200}>
-            {appStateStore.exportPresets.map((preset) => {
-              const codec = resolvePresetCodec(preset, hwEncoders, preferGpu);
-              const detecting = appStateStore.hwEncoders == null;
-              return (
-                <OptionCard
-                  key={preset.id}
-                  icon={preset.custom ? CUSTOM_PRESET_ICON : PRESET_ICONS[preset.id]}
-                  title={preset.title}
-                  description={
-                    codec
-                      ? preset.description
-                      : detecting
-                        ? "Detecting encoders…"
-                        : preset.gpu == "required"
-                          ? "Needs an NVIDIA, AMD, Intel or Apple GPU"
-                          : "Not supported by this FFmpeg build"
-                  }
-                  details={codec ? `${codecShortLabel(codec)} · ${preset.details}` : undefined}
-                  selected={video.exportPreset == preset.id}
-                  disabled={!codec}
-                  onClick={() => {
-                    video.applyExportPreset(preset, hwEncoders, preferGpu);
-                    onPresetPicked(false);
-                  }}
-                  action={preset.custom && <CustomPresetMenu preset={preset} />}
-                />
-              );
-            })}
-            <OptionCard
-              icon={PRESET_ICONS.custom}
-              title="Custom"
-              description="Pick every setting yourself"
-              selected={video.exportPreset == "custom"}
-              onClick={() => {
-                video.setExportPreset("custom");
-                onPresetPicked(true);
-              }}
-            />
-          </CardGrid>
+          <AnimatedHeight>
+            <CardGrid minWidth={200}>
+              {appStateStore.exportPresets.map((preset) => {
+                const codec = resolvePresetCodec(preset, hwEncoders, preferGpu);
+                const detecting = appStateStore.hwEncoders == null;
+                return (
+                  <OptionCard
+                    key={preset.id}
+                    icon={preset.custom ? CUSTOM_PRESET_ICON : PRESET_ICONS[preset.id]}
+                    title={preset.title}
+                    description={
+                      codec
+                        ? preset.description
+                        : detecting
+                          ? "Detecting encoders…"
+                          : preset.gpu == "required"
+                            ? `Needs an ${gpuVendorsHint(appStateStore.gpuVendors)} GPU`
+                            : "Not supported by this FFmpeg build"
+                    }
+                    details={codec ? `${codecShortLabel(codec)} · ${preset.details}` : undefined}
+                    selected={video.exportPreset == preset.id}
+                    disabled={!codec}
+                    onClick={() => {
+                      video.applyExportPreset(preset, hwEncoders, preferGpu);
+                      onPresetPicked(false);
+                    }}
+                    action={preset.custom && <CustomPresetMenu preset={preset} />}
+                  />
+                );
+              })}
+              <OptionCard
+                icon={PRESET_ICONS.custom}
+                title="Custom"
+                description="Pick every setting yourself"
+                selected={video.exportPreset == "custom"}
+                onClick={() => {
+                  video.setExportPreset("custom");
+                  onPresetPicked(true);
+                }}
+              />
+            </CardGrid>
+          </AnimatedHeight>
         </Section>
         <FormControlLabel
           sx={{alignItems: "flex-start", mx: 0, gap: 1}}
@@ -610,7 +641,7 @@ const VideoStep = observer(({video}: {video: VideoEditorStore}) => {
     <Stack spacing={2.5}>
       <Section label="Encoder">
         <CardGrid minWidth={140}>
-          {ENCODERS.map((e) => {
+          {platformEncoders(appStateStore.gpuVendors).map((e) => {
             const available = isVendorAvailable(e.vendor, hwEncoders);
             const description =
               e.vendor == "cpu"
