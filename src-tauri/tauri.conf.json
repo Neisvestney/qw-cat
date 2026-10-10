@@ -35,7 +35,10 @@
     ],
     "category": "Video",
     "longDescription": "Desktop application designed for quick video trimming and processing.\nBuilt with Tauri v2 and React, powered by FFmpeg.\nYou can install ffmpeg from your package manager before launching the app.",
-    "targets": ["nsis", "deb", "rpm", "appimage"],
+    "targets": ["nsis", "deb", "rpm", "appimage", "app", "dmg"],
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "windows": {
       "nsis": {
         "installMode": "currentUser",

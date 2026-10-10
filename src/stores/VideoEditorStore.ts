@@ -1,10 +1,10 @@
-import {makeAutoObservable} from "mobx";
+import {makeAutoObservable, runInAction} from "mobx";
 import {VideoAudioStreamsInfo} from "../generated/bindings/VideoAudioStreamsInfo.ts";
 import {AudioStreamFilePath} from "../generated/bindings/AudioStreamFilePath.ts";
 import addPostfixToFilename from "../lib/addPostfixToFilename.ts";
 import replaceExtension from "../lib/replaceExtension.ts";
 import estimateVideoSize from "../lib/estimateVideoSize.ts";
-import {CustomExportPreset, ffmpegExport, GpuAcceleration} from "../generated";
+import {CustomExportPreset, ffmpegExport, GpuAcceleration, preparePlaybackCopy} from "../generated";
 import {gainToGainValue} from "../lib/useAudioMixer.ts";
 import convertFilePath from "../lib/convertFilePath.ts";
 import AppStateStore from "./AppStateStore.ts";
@@ -83,9 +83,16 @@ class VideoEditorStore {
   };
 
   videoPlayerError: ErrorEvent | null = null;
+  // mp4 copy played instead of the source when the webview can't open its container
+  playbackPath: string | null = null;
+  preparingPlayback = false;
+  playbackCopyAttempted = false;
 
   getVideoPath() {
-    return convertFilePath(this.path, this.appStateStore.integratedServerStatus);
+    return convertFilePath(
+      this.playbackPath ?? this.path,
+      this.appStateStore.integratedServerStatus,
+    );
   }
 
   setVideoDuration(duration: number) {
@@ -180,8 +187,30 @@ class VideoEditorStore {
     return this.audioStreams.filter((x) => x.active);
   }
 
-  handleVideoPlayerError(error: ErrorEvent) {
-    this.videoPlayerError = error;
+  async handleVideoPlayerError(error: ErrorEvent) {
+    if (this.preparingPlayback) return;
+
+    const code = (error.target as HTMLVideoElement | null)?.error?.code;
+    if (this.playbackCopyAttempted || code != MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+      this.videoPlayerError = error;
+      return;
+    }
+
+    this.playbackCopyAttempted = true;
+    this.preparingPlayback = true;
+    const playbackPath = await preparePlaybackCopy({videoFilePath: this.path}).catch((e) => {
+      console.error("Failed to prepare playback copy:", e);
+      return null;
+    });
+    runInAction(() => {
+      this.preparingPlayback = false;
+      if (playbackPath) {
+        this.playbackPath = playbackPath;
+        this.videoPlayerError = null;
+      } else {
+        this.videoPlayerError = error;
+      }
+    });
   }
 
   handleVideoStateChange<K extends keyof VideoState>(key: K, value: VideoState[K]) {

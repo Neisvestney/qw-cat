@@ -521,7 +521,7 @@ const PurposeStep = observer(
                       : detecting
                         ? "Detecting encoders…"
                         : preset.gpu == "required"
-                          ? "Needs an NVIDIA, AMD or Intel GPU"
+                          ? "Needs an NVIDIA, AMD, Intel or Apple GPU"
                           : "Not supported by this FFmpeg build"
                   }
                   details={codec ? `${codecShortLabel(codec)} · ${preset.details}` : undefined}

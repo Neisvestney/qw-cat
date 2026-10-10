@@ -13,10 +13,11 @@ pub struct HwEncoders {
 
 // Grouped by vendor: vendors are probed in parallel, encoders of one vendor one by one to stay under NVENC session limits.
 // The last group holds CPU encoders that some ffmpeg builds leave out
-const HW_ENCODERS: [&[&str]; 4] = [
+const HW_ENCODERS: [&[&str]; 5] = [
     &["h264_nvenc", "hevc_nvenc", "av1_nvenc"],
     &["h264_amf", "hevc_amf", "av1_amf"],
     &["h264_qsv", "hevc_qsv", "av1_qsv", "vp9_qsv"],
+    &["h264_videotoolbox", "hevc_videotoolbox", "prores_videotoolbox"],
     &["libsvtav1", "libwebp_anim"],
 ];
 

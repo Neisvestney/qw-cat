@@ -23,6 +23,11 @@ export const ENCODERS: EncoderInfo[] = [
     label: "Intel Quick Sync",
     codecs: ["h264_qsv", "hevc_qsv", "av1_qsv", "vp9_qsv"],
   },
+  {
+    vendor: "apple",
+    label: "Apple VideoToolbox",
+    codecs: ["h264_videotoolbox", "hevc_videotoolbox", "prores_videotoolbox"],
+  },
 ];
 
 const FAMILY_LABELS: Record<CodecFamily, string> = {
@@ -58,8 +63,19 @@ const CPU_CODEC_LABELS: Record<string, string> = {
 // Missing from some ffmpeg builds, so the backend probes them together with the GPU encoders
 const PROBED_CPU_CODECS = ["libsvtav1", "libwebp_anim"];
 
-const GPU_ORDER: GpuAcceleration[] = ["nvidia", "amd", "intel"];
-const GPU_SUFFIX: Record<GpuAcceleration, string> = {nvidia: "nvenc", amd: "amf", intel: "qsv"};
+const GPU_ORDER: GpuAcceleration[] = ["nvidia", "amd", "intel", "apple"];
+const GPU_SUFFIX: Record<GpuAcceleration, string> = {
+  nvidia: "nvenc",
+  amd: "amf",
+  intel: "qsv",
+  apple: "videotoolbox",
+};
+const GPU_SHORT_LABELS: Record<GpuAcceleration, string> = {
+  nvidia: "NVIDIA",
+  amd: "AMD",
+  intel: "Intel",
+  apple: "Apple",
+};
 const CPU_CODECS: Partial<Record<CodecFamily, string>> = {
   h264: "libx264",
   hevc: "libx265",
@@ -76,7 +92,7 @@ export function codecFamily(codec: string | null): CodecFamily | null {
   if (codec == "libx265" || codec.startsWith("hevc_")) return "hevc";
   if (codec == "libvpx-vp9" || codec.startsWith("vp9_")) return "vp9";
   if (codec == "libsvtav1" || codec.startsWith("av1_")) return "av1";
-  if (codec == "prores_ks") return "prores";
+  if (codec.startsWith("prores_")) return "prores";
   if (codec == "gif") return "gif";
   if (codec == "libwebp_anim") return "webp";
   return null;
@@ -429,7 +445,7 @@ export function resolvePresetCodec(preset: ExportPreset, hwEncoders: string[], p
 export function codecShortLabel(codec: string) {
   const vendor = encoderVendor(codec);
   if (vendor == "cpu") return `${CPU_CODEC_LABELS[codec] ?? codec} · CPU`;
-  return `${codecLabel(codec)} · ${vendor == "nvidia" ? "NVIDIA" : vendor == "amd" ? "AMD" : "Intel"}`;
+  return `${codecLabel(codec)} · ${GPU_SHORT_LABELS[vendor]}`;
 }
 
 const FALLBACK_SOURCE: VideoStreamInfo = {width: 1920, height: 1080, frameRate: null};
