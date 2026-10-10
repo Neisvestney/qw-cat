@@ -11,6 +11,7 @@ mod hw_encoders;
 mod integrated_server;
 mod logs_store;
 mod open_devtools_command;
+mod playback_copy_command;
 mod recent_videos;
 mod select_new_video_file_command;
 mod temp_cleanup;
@@ -19,11 +20,14 @@ use crate::custom_export_presets::{get_custom_export_presets, save_custom_export
 use crate::ffmpeg::{FfmpegTasksQueue, create_ffmpeg_tasks_queue, emit_ffmpeg_queue_status, enqueue_download_ffmpeg_task};
 use crate::ffmpeg_export_command::{cancel_ffmpeg_task_by_index, ffmpeg_export};
 use crate::handle_cli_args::handle_cli_args_on_frontend_initialized;
+#[cfg(target_os = "macos")]
+use crate::handle_cli_args::handle_opened_urls;
 use crate::handle_main_window_event::handle_main_window_event;
 use crate::hw_encoders::detect_hw_encoders;
 use crate::integrated_server::{IntegratedServerState, get_integrated_server_state, start_integrated_server};
 use crate::logs_store::{LogsStore, get_logs, get_logs_store_target};
 use crate::open_devtools_command::open_devtools;
+use crate::playback_copy_command::prepare_playback_copy;
 use crate::recent_videos::{get_recent_videos, open_recent_video, remove_recent_video};
 use crate::select_new_video_file_command::select_new_video_file;
 use crate::temp_cleanup::cleanup_temp;
@@ -94,9 +98,16 @@ pub fn run() {
             get_recent_videos,
             open_recent_video,
             remove_recent_video,
+            prepare_playback_copy,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, _event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = _event {
+                handle_opened_urls(_app_handle, urls);
+            }
+        });
 }
 
 #[cfg(debug_assertions)]

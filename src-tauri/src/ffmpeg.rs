@@ -88,6 +88,12 @@ pub enum FfmpegTaskType {
     DownloadFfmpeg {
         result: Option<FfmpegDownloadTaskResult>,
     },
+    RemuxVideo {
+        video_file_path: String,
+        result: Option<FfmpegRemuxVideoTaskResult>,
+        #[serde(skip)]
+        on_complete: Option<oneshot::Sender<FfmpegRemuxVideoTaskResult>>,
+    },
 }
 
 impl Clone for FfmpegTaskType {
@@ -107,6 +113,15 @@ impl Clone for FfmpegTaskType {
                 result: result.clone(),
             },
             FfmpegTaskType::DownloadFfmpeg { result } => FfmpegTaskType::DownloadFfmpeg { result: result.clone() },
+            FfmpegTaskType::RemuxVideo {
+                video_file_path,
+                result,
+                on_complete: _on_complete,
+            } => FfmpegTaskType::RemuxVideo {
+                video_file_path: video_file_path.clone(),
+                result: result.clone(),
+                on_complete: None,
+            },
         }
     }
 }
@@ -126,6 +141,11 @@ pub struct FfmpegDownloadTaskResult {
     pub already_installed: bool,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, ts_rs::TS)]
+pub struct FfmpegRemuxVideoTaskResult {
+    pub output_path: String,
+}
+
 impl FfmpegTaskType {
     pub fn extract_audio(path: String, on_complete: Option<oneshot::Sender<FfmpegAudioExtractTaskResult>>) -> Self {
         Self::ExtractAudio {
@@ -137,6 +157,14 @@ impl FfmpegTaskType {
 
     pub fn export_video(options: ExportOptions) -> Self {
         Self::ExportVideo { options, result: None }
+    }
+
+    pub fn remux_video(path: String, on_complete: Option<oneshot::Sender<FfmpegRemuxVideoTaskResult>>) -> Self {
+        Self::RemuxVideo {
+            video_file_path: path,
+            result: None,
+            on_complete,
+        }
     }
 }
 
@@ -167,9 +195,10 @@ pub async fn run_next_task(queue: MutexGuard<'_, Vec<Arc<RwLock<FfmpegTask>>>>) 
         }
     }
 
-    drop(queue);
-
     if !has_in_progress && let Some(next_task) = first_queued_task {
+        // Marked while the queue is still locked, otherwise a concurrent call could start the same task twice
+        next_task.write().await.status = FfmpegTaskStatus::InProgress { progress: 0.0 };
+        drop(queue);
         tokio::spawn(run_ffmpeg_task(next_task));
     }
 }
@@ -182,13 +211,147 @@ fn get_audio_file_path(video_file_path: &str, audio_stream_index: i32, format: &
     tmp_folder.join(audio_file_name).to_string_lossy().to_string()
 }
 
+const MP4_COPYABLE_AUDIO_CODECS: [&str; 5] = ["aac", "mp3", "alac", "flac", "opus"];
+
+fn get_playback_copy_path(video_file_path: &str, source_metadata: &std::fs::Metadata) -> std::path::PathBuf {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+
+    let tmp_folder = std::env::temp_dir().join(APP_IDENTIFIER);
+    std::fs::create_dir_all(&tmp_folder).unwrap();
+    // Size and mtime are part of the key so a replaced source never reuses a stale copy
+    let mut hasher = DefaultHasher::new();
+    video_file_path.hash(&mut hasher);
+    source_metadata.len().hash(&mut hasher);
+    source_metadata.modified().ok().hash(&mut hasher);
+
+    tmp_folder.join(format!("playback_{:016x}.mp4", hasher.finish()))
+}
+
+// Only this process's own copy is replaced, another running instance may still be playing its copy from the same dir
+static LAST_PLAYBACK_COPY: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex::new(None);
+
+// Each copy is as large as its source, so only the one for the current video is kept
+fn replace_last_playback_copy(current: &std::path::Path) {
+    let mut last = LAST_PLAYBACK_COPY.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(previous) = last.replace(current.to_path_buf())
+        && previous != current
+    {
+        let _ = std::fs::remove_file(previous);
+    }
+}
+
+// Rewraps the first video and audio streams into mp4 for containers the webview can't play (e.g. MPEG-TS)
+fn remux_for_playback(video_file_path: &str, ffmpeg_task: &Arc<RwLock<FfmpegTask>>) -> Option<FfmpegRemuxVideoTaskResult> {
+    let source_metadata = std::fs::metadata(video_file_path).ok()?;
+    let output_path = get_playback_copy_path(video_file_path, &source_metadata);
+    let result = FfmpegRemuxVideoTaskResult {
+        output_path: output_path.to_string_lossy().to_string(),
+    };
+
+    if output_path.exists() {
+        info!("Reusing playback copy {:?}", output_path);
+        replace_last_playback_copy(&output_path);
+        return Some(result);
+    }
+
+    let video_info = get_video_streams_info(video_file_path)?;
+    let video_codec = video_info.streams.first().map(|s| s.codec_name.as_str());
+    let format_name = video_info.format.format_name.as_deref().unwrap_or_default();
+
+    // An mp4 that fails to play has an unsupported codec, which a remux can't fix. The exception is
+    // HEVC on WebKit, which only plays it when tagged hvc1
+    let is_mp4_family = format_name.split(',').any(|f| f == "mp4" || f == "mov");
+    let needs_hvc1_tag = cfg!(target_os = "macos") && video_codec == Some("hevc");
+    if is_mp4_family && !needs_hvc1_tag {
+        info!("Skipping playback copy: {format_name} with {video_codec:?} won't play after a remux either");
+        return None;
+    }
+
+    let audio_info = get_video_audio_streams_info(video_file_path)?;
+
+    replace_last_playback_copy(&output_path);
+
+    // Written under a temporary name so an interrupted remux is never reused as a finished copy
+    let part_path = output_path.with_extension("mp4.part");
+
+    let mut ffmpeg_command = FfmpegCommand::new_with_path(ffmpeg_path());
+    ffmpeg_command
+        .input(video_file_path)
+        .args(["-y", "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "copy"]);
+
+    match audio_info.audio_streams.first() {
+        Some(stream) if MP4_COPYABLE_AUDIO_CODECS.contains(&stream.codec_name.as_str()) => {
+            ffmpeg_command.args(["-c:a", "copy"]);
+        }
+        _ => {
+            ffmpeg_command.args(["-c:a", "aac", "-b:a", "192k"]);
+        }
+    }
+
+    if video_codec == Some("hevc") {
+        ffmpeg_command.args(["-tag:v", "hvc1"]);
+    }
+
+    ffmpeg_command.args(["-f", "mp4"]).output(part_path.to_string_lossy());
+
+    let completed = run_remux_command(&mut ffmpeg_command, ffmpeg_task, audio_info.duration);
+    // ffmpeg exits cleanly on "q", so a cancelled remux looks successful but leaves a truncated file
+    let cancelled = ffmpeg_task.blocking_read().status == FfmpegTaskStatus::Cancelled;
+
+    if !completed || cancelled || std::fs::rename(&part_path, &output_path).is_err() {
+        let _ = std::fs::remove_file(&part_path);
+        return None;
+    }
+
+    Some(result)
+}
+
+fn run_remux_command(ffmpeg_command: &mut FfmpegCommand, ffmpeg_task: &Arc<RwLock<FfmpegTask>>, duration: f64) -> bool {
+    info!("Running ffmpeg task: {:?}", ffmpeg_command.print_command());
+
+    let Ok(mut ffmpeg_child) = ffmpeg_command.spawn() else {
+        return false;
+    };
+
+    if let Some(child_std_in) = ffmpeg_child.take_stdin() {
+        async_runtime::spawn(handle_ffmpeg_stdin(child_std_in, ffmpeg_task.clone()));
+    }
+
+    let Ok(events) = ffmpeg_child.iter() else {
+        let _ = ffmpeg_child.kill();
+        let _ = ffmpeg_child.wait();
+        return false;
+    };
+
+    events.for_each(|e| match e {
+        FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, e) => {
+            error!("Ffmpeg: {e}")
+        }
+        FfmpegEvent::Log(_log_level, s) => {
+            info!("Ffmpeg: {s}")
+        }
+        FfmpegEvent::Progress(p) => {
+            handle_ffmpeg_progress(p, ffmpeg_task, duration);
+        }
+        _ => {}
+    });
+
+    let exit_status = ffmpeg_child.wait();
+    debug!("Ffmpeg exited with status: {:?}", exit_status);
+
+    exit_status.map(|s| s.success()).unwrap_or(false)
+}
+
 // Pinned to 8-bit 4:2:0, otherwise 10-bit sources give High 10 / 10-bit streams that browsers and Discord can't play
 fn output_pix_fmt(video_codec: Option<&str>) -> Option<&'static str> {
     match video_codec {
         Some("prores_ks") => Some("yuv422p10le"),
+        Some("prores_videotoolbox") => Some("p210le"),
         // paletteuse already outputs pal8
         Some("gif") => None,
-        Some(codec) if codec.ends_with("_nvenc") || codec.ends_with("_amf") || codec.ends_with("_qsv") => Some("nv12"),
+        Some(codec) if codec.ends_with("_nvenc") || codec.ends_with("_amf") || codec.ends_with("_qsv") || codec.ends_with("_videotoolbox") => {
+            Some("nv12")
+        }
         _ => Some("yuv420p"),
     }
 }
@@ -196,11 +359,6 @@ fn output_pix_fmt(video_codec: Option<&str>) -> Option<&'static str> {
 #[allow(clippy::manual_async_fn)] // Recursive async function (Send is not auto implements)
 fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output = ()> + Send {
     async move {
-        {
-            let mut ffmpeg_task_guard = ffmpeg_task.write().await;
-            ffmpeg_task_guard.status = FfmpegTaskStatus::InProgress { progress: 0.0 };
-        }
-
         emit_ffmpeg_queue_status().await;
         set_main_window_progress_bar(Some(0.0));
 
@@ -340,8 +498,8 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                                         _ => None,
                                     }
                                 }
-                                // AMF/QSV encoders take software frames, so decoding and scaling stay on the CPU
-                                Some(GpuAcceleration::Amd | GpuAcceleration::Intel) | None => None,
+                                // AMF/QSV/VideoToolbox encoders take software frames, so decoding and scaling stay on the CPU
+                                Some(GpuAcceleration::Amd | GpuAcceleration::Intel | GpuAcceleration::Apple) | None => None,
                             }
                         };
 
@@ -486,6 +644,9 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                             Some("prores_ks") => {
                                 ffmpeg_command.args(["-profile:v", "3", "-vendor", "apl0"]);
                             }
+                            Some("prores_videotoolbox") => {
+                                ffmpeg_command.args(["-profile:v", "hq"]);
+                            }
                             // The webp muxer plays once by default, unlike gif
                             Some("libwebp_anim") => {
                                 ffmpeg_command.args(["-loop", "0"]);
@@ -572,11 +733,17 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                 let ffmpeg_task_clone = ffmpeg_task.clone();
 
                 let ffmpeg_result = tokio::task::spawn_blocking(move || {
-                    let ffmpeg_is_installed = ffmpeg_is_installed() && ffprobe_is_installed();
+                    let ffmpeg_is_installed = ffmpeg_is_installed();
+                    let ffprobe_is_installed = ffprobe_is_installed();
 
-                    info!("FFmpeg is installed: {} (ffmpeg path: {:?})", ffmpeg_is_installed, ffmpeg_path().to_str());
+                    info!(
+                        "FFmpeg is installed: {}, ffprobe is installed: {} (ffmpeg path: {:?})",
+                        ffmpeg_is_installed,
+                        ffprobe_is_installed,
+                        ffmpeg_path().to_str()
+                    );
 
-                    if ffmpeg_is_installed {
+                    if ffmpeg_is_installed && ffprobe_is_installed {
                         return Ok(true);
                     }
 
@@ -586,6 +753,10 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                         let ffmpeg_task_clone = ffmpeg_task_clone.clone();
                         tokio::spawn(async move {
                             let mut ffmpeg_task = ffmpeg_task_clone.write().await;
+                            // Same as handle_ffmpeg_progress: the last callback can land after the task finished
+                            if !matches!(ffmpeg_task.status, FfmpegTaskStatus::InProgress { .. }) {
+                                return;
+                            }
                             ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
                             drop(ffmpeg_task);
                             emit_ffmpeg_queue_status().await;
@@ -613,6 +784,31 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                 }
                 drop(ffmpeg_task);
             }
+            FfmpegTaskType::RemuxVideo { video_file_path, .. } => {
+                let video_file_path = video_file_path.clone();
+                drop(ffmpeg_task_guard);
+
+                let ffmpeg_result = tokio::task::spawn_blocking(move || remux_for_playback(&video_file_path, &ffmpeg_task_clone))
+                    .await
+                    .ok()
+                    .flatten();
+
+                let mut ffmpeg_task = ffmpeg_task.write().await;
+                if ffmpeg_task.status != FfmpegTaskStatus::Cancelled {
+                    ffmpeg_task.status = match ffmpeg_result {
+                        Some(_) => FfmpegTaskStatus::Finished,
+                        None => FfmpegTaskStatus::Failed,
+                    };
+                }
+                if let FfmpegTaskType::RemuxVideo { on_complete, result, .. } = &mut ffmpeg_task.task_type {
+                    *result = ffmpeg_result.clone();
+                    // Dropping the sender on failure lets the waiting command return instead of hanging
+                    if let (Some(sender), Some(ffmpeg_result)) = (on_complete.take(), ffmpeg_result) {
+                        let _ = sender.send(ffmpeg_result);
+                    }
+                }
+                drop(ffmpeg_task);
+            }
         };
 
         emit_ffmpeg_queue_status().await;
@@ -632,6 +828,10 @@ pub async fn enqueue_extract_audio_task(queue: &FfmpegTasksQueue, path: String, 
 
 pub async fn enqueue_export_video_task(queue: &FfmpegTasksQueue, options: ExportOptions) {
     enqueue_ffmpeg_task(queue, FfmpegTask::new(FfmpegTaskType::export_video(options))).await;
+}
+
+pub async fn enqueue_remux_video_task(queue: &FfmpegTasksQueue, path: String, on_complete: Option<oneshot::Sender<FfmpegRemuxVideoTaskResult>>) {
+    enqueue_ffmpeg_task(queue, FfmpegTask::new(FfmpegTaskType::remux_video(path, on_complete))).await;
 }
 
 pub async fn enqueue_download_ffmpeg_task(queue: &FfmpegTasksQueue) {
@@ -661,6 +861,10 @@ async fn handle_ffmpeg_stdin(mut stdin: ChildStdin, ffmpeg_task: Arc<RwLock<Ffmp
 #[allow(clippy::collapsible_if)]
 pub async fn cancel_ffmpeg_task(ffmpeg_task: &Arc<RwLock<FfmpegTask>>) {
     let mut ffmpeg_task = ffmpeg_task.write().await;
+    // The stdin channel outlives the process, so a late click must not mark a finished task as cancelled
+    if !matches!(ffmpeg_task.status, FfmpegTaskStatus::InProgress { .. }) {
+        return;
+    }
     if let Some(ffmpeg_stdin) = &ffmpeg_task.ffmpeg_stdin {
         if ffmpeg_stdin.send("q".to_string()).await.is_ok() {
             debug!("Sent q to ffmpeg stdin");
@@ -675,20 +879,21 @@ fn handle_ffmpeg_progress(p: FfmpegProgress, ffmpeg_task: &Arc<RwLock<FfmpegTask
     tokio::spawn(async move {
         let mut ffmpeg_task = ffmpeg_task_clone.write().await;
 
-        let progress = if ffmpeg_task.status != FfmpegTaskStatus::Cancelled {
-            let progress = FfmpegTimeDuration::from_str(&p.time)
-                .map(FfmpegTimeDuration::as_seconds)
-                .unwrap_or_default()
-                / total_duration;
-            ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
-            Some(progress)
-        } else {
-            None
-        };
+        // A late event must not revive a finished or cancelled task (the queue would wait for it forever)
+        // or reset the taskbar progress of the task that runs next
+        if !matches!(ffmpeg_task.status, FfmpegTaskStatus::InProgress { .. }) {
+            return;
+        }
+
+        let progress = FfmpegTimeDuration::from_str(&p.time)
+            .map(FfmpegTimeDuration::as_seconds)
+            .unwrap_or_default()
+            / total_duration;
+        ffmpeg_task.status = FfmpegTaskStatus::InProgress { progress };
 
         drop(ffmpeg_task);
         emit_ffmpeg_queue_status().await;
-        set_main_window_progress_bar(progress);
+        set_main_window_progress_bar(Some(progress));
         // println!("ffmpeg progress: {}%", progress * 100.0);
     });
 }

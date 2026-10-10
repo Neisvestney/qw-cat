@@ -230,7 +230,10 @@ const VideoView = observer(() => {
     };
 
     const handleVideoError = (e: ErrorEvent) => {
-      console.error("Video error:", e);
+      const mediaError = (e.target as HTMLVideoElement | null)?.error;
+      console.error(
+        `Video error: code ${mediaError?.code}, ${mediaError?.message || "no message"}`,
+      );
       if (appStateStore.currentVideo) appStateStore.currentVideo.handleVideoPlayerError(e);
     };
 
@@ -368,6 +371,22 @@ const VideoView = observer(() => {
             onClick={handleVideoClicked}
             onDoubleClick={handleVideoDoubleClicked}
           />
+          {appStateStore.currentVideo.preparingPlayback && (
+            <VideoOverlayControlsWrapper
+              align={"center"}
+              fullscreen={appStateStore.currentVideo.videoState.fullscreen}
+            >
+              <Stack direction={"row"} spacing={2} alignItems={"center"}>
+                <CircularProgress />
+                <Stack>
+                  <Typography variant={"h5"}>Preparing video for playback</Typography>
+                  <Typography variant={"subtitle1"}>
+                    The player does not support this container, rewrapping it into mp4
+                  </Typography>
+                </Stack>
+              </Stack>
+            </VideoOverlayControlsWrapper>
+          )}
           {appStateStore.currentVideo.videoPlayerError && (
             <VideoOverlayControlsWrapper
               align={"center"}

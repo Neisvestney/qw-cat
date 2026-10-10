@@ -1,21 +1,62 @@
 name: Build app and upload to release
 
 on:
-  release:
-    types: [ published ]
+  push:
+    tags: [ 'v*' ]
 
 jobs:
+  create-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create-release.outputs.result }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Bundle file names come from Cargo.toml and the in-app update check compares against package.json,
+      # so a tag that doesn't match both would ship mislabeled assets or a permanent update banner
+      - name: Check tag matches app version
+        run: |
+          cargo_version=$(grep -m1 '^version' src-tauri/Cargo.toml | cut -d'"' -f2)
+          package_version=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "v$cargo_version" ] || [ "$TAG" != "v$package_version" ]; then
+            echo "::error::Tag $TAG must match src-tauri/Cargo.toml ($cargo_version) and package.json ($package_version)"
+            exit 1
+          fi
+        env:
+          TAG: ${{ github.ref_name }}
+        shell: bash
+
+      - name: Create draft release
+        id: create-release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: context.ref.replace('refs/tags/', ''),
+              name: context.ref.replace('refs/tags/', ''),
+              generate_release_notes: true,
+              draft: true,
+              prerelease: false
+            })
+            return data.id
+
   build-tauri:
     permissions:
       contents: write
+    needs: [ create-release ]
     strategy:
       fail-fast: false
       matrix:
         include:
-          #          - platform: 'macos-latest' # for Arm based macs (M1 and above).
-          #            args: '--target aarch64-apple-darwin'
-          #          - platform: 'macos-latest' # for Intel based macs.
-          #            args: '--target x86_64-apple-darwin'
+          - platform: 'macos-latest' # for Arm based macs (M1 and above).
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest' # for Intel based macs.
+            args: '--target x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
             args: ''
           - platform: 'ubuntu-22.04-arm'
@@ -57,8 +98,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          releaseId: ${{ github.event.release.id }}
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+
+  # The flatpak manifest points to the .deb assets, which can only be fetched publicly once the release is not a draft
+  expose-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    needs: [ create-release, build-tauri ]
+
+    steps:
+      - name: Publish release as prerelease
+        uses: actions/github-script@v7
+        env:
+          release_id: ${{ needs.create-release.outputs.release_id }}
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: process.env.release_id,
+              draft: false,
+              prerelease: true
+            })
 
   build-and-publish-flatpak:
     strategy:
@@ -76,7 +139,7 @@ jobs:
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-49
       options: --privileged
-    needs: [ build-tauri ]
+    needs: [ expose-release ]
 
     steps:
       - uses: actions/checkout@v4
@@ -90,7 +153,7 @@ jobs:
         run: yarn install
 
       - name: Generate flatpak manifest
-        run: node ./src-tauri/bundle/render-templates.js remote ${{ github.event.release.tag_name }}
+        run: node ./src-tauri/bundle/render-templates.js remote ${{ github.ref_name }}
 
       - name: Mark workspace as safe
         run: git config --global --add safe.directory .
@@ -98,14 +161,14 @@ jobs:
       - name: 'Upload flatpak manifest'
         if: matrix.platform == 'ubuntu-22.04'
         run: |
-          gh release upload ${{ github.event.release.tag_name }} "./src-tauri/bundle/generated/io.github.neisvestney.qw-cat.yml#Flatpak manifest (yml)"
+          gh release upload ${{ github.ref_name }} "./src-tauri/bundle/generated/io.github.neisvestney.qw-cat.yml#Flatpak manifest (yml)" --clobber
         env:
           GITHUB_TOKEN: ${{ github.TOKEN }}
         shell: bash
 
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          bundle: qw-cat-${{ github.event.release.tag_name }}-${{ matrix.arch }}.flatpak
+          bundle: qw-cat-${{ github.ref_name }}-${{ matrix.arch }}.flatpak
           manifest-path: ./src-tauri/bundle/generated/io.github.neisvestney.qw-cat.yml
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.arch }}
@@ -113,7 +176,7 @@ jobs:
 
       - name: 'Upload flatpak artifact'
         run: |
-          gh release upload ${{ github.event.release.tag_name }} qw-cat-${{ github.event.release.tag_name }}-${{ matrix.arch }}.flatpak
+          gh release upload ${{ github.ref_name }} qw-cat-${{ github.ref_name }}-${{ matrix.arch }}.flatpak --clobber
         env:
           GITHUB_TOKEN: ${{ github.TOKEN }}
         shell: bash
@@ -122,17 +185,17 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
-    needs: [ build-tauri, build-and-publish-flatpak ]
+    needs: [ create-release, build-and-publish-flatpak ]
 
     steps:
       - name: Publish release
         id: publish-release
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         env:
-          release_id: ${{ github.event.release.id }}
+          release_id: ${{ needs.create-release.outputs.release_id }}
         with:
           script: |
-            github.rest.repos.updateRelease({
+            await github.rest.repos.updateRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
               release_id: process.env.release_id,

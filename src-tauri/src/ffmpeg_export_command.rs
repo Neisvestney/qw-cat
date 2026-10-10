@@ -37,6 +37,7 @@ pub enum GpuAcceleration {
     Nvidia,
     Amd,
     Intel,
+    Apple,
 }
 
 #[tauri::command]

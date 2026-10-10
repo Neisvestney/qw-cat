@@ -84,6 +84,19 @@ const getTaskView = (ffmpegTask: FfmpegTask) => {
         icon: <DownloadIcon />,
         onClick: null,
       };
+    case "remuxVideo":
+      return {
+        label: {
+          queued: "Playback preparation queued",
+          inProgress: "Preparing video for playback",
+          finished: "Video prepared for playback",
+          failed: "Playback preparation failed - see logs for more info",
+          cancelled: "Playback preparation cancelled",
+        }[ffmpegTask.status.type],
+        secondary: `${ffmpegTask.taskType.videoFilePath}`,
+        icon: <VideocamIcon />,
+        onClick: null,
+      };
   }
 };
 

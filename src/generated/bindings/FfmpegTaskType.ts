@@ -3,5 +3,6 @@ import type { ExportOptions } from "./ExportOptions";
 import type { FfmpegAudioExtractTaskResult } from "./FfmpegAudioExtractTaskResult";
 import type { FfmpegDownloadTaskResult } from "./FfmpegDownloadTaskResult";
 import type { FfmpegExportVideoTaskResult } from "./FfmpegExportVideoTaskResult";
+import type { FfmpegRemuxVideoTaskResult } from "./FfmpegRemuxVideoTaskResult";
 
-export type FfmpegTaskType = { "type": "extractAudio", videoFilePath: string, result: FfmpegAudioExtractTaskResult | null, } | { "type": "exportVideo", options: ExportOptions, result: FfmpegExportVideoTaskResult | null, } | { "type": "downloadFfmpeg", result: FfmpegDownloadTaskResult | null, };
+export type FfmpegTaskType = { "type": "extractAudio", videoFilePath: string, result: FfmpegAudioExtractTaskResult | null, } | { "type": "exportVideo", options: ExportOptions, result: FfmpegExportVideoTaskResult | null, } | { "type": "downloadFfmpeg", result: FfmpegDownloadTaskResult | null, } | { "type": "remuxVideo", videoFilePath: string, result: FfmpegRemuxVideoTaskResult | null, };
