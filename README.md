@@ -8,6 +8,7 @@
         <a href="https://github.com/Neisvestney/qw-cat/releases/latest"><img alt="Windows download" src="https://img.shields.io/badge/download-windows_x64-blue?style=for-the-badge"></a>
         <a href="https://github.com/Neisvestney/qw-cat/releases/latest"><img alt="Linux .deb download" src="https://img.shields.io/badge/download-linux_x64_.deb-orange?style=for-the-badge&logo=debian"></a>
         <a href="https://github.com/Neisvestney/qw-cat/releases/latest"><img alt="Linux .rpm download" src="https://img.shields.io/badge/download-linux_x64_.rpm-blue?style=for-the-badge&logo=fedora"></a>
+        <a href="https://github.com/Neisvestney/qw-cat/releases/latest"><img alt="macOS download" src="https://img.shields.io/badge/download-macos_.dmg-black?style=for-the-badge&logo=apple"></a>
         <a href="https://github.com/Neisvestney/qw-cat/releases/latest"><img alt="Other download" src="https://img.shields.io/badge/download-other-lightslategray?style=for-the-badge"></a>
     </p>
 </p>

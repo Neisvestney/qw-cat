@@ -34,12 +34,49 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('fs')
+            const tag = context.ref.replace('refs/tags/', '')
+
+            // Release notes come from the newest <release> in metainfo; AppStream uses "~" where semver uses "-"
+            const metainfo = fs.readFileSync('src-tauri/bundle/io.github.neisvestney.qw-cat.metainfo.xml', 'utf8')
+            const release = metainfo.match(/<release\s+version="([^"]+)"[^>]*>([\s\S]*?)<\/release>/)
+            if (!release || `v${release[1].replace('~', '-')}` !== tag) {
+              core.setFailed(`Newest <release> in metainfo (${release?.[1]}) does not match tag ${tag}`)
+              return
+            }
+            const changes = [...release[2].matchAll(/<(?:li|p)>([\s\S]*?)<\/(?:li|p)>/g)]
+              .map(m => `- ${m[1].trim()}`)
+              .join('\n')
+
+            const table = [
+              '| Platform | Architecture | Format |  |',
+              '|--------|--------------|--------|------------------------|',
+              '|  ⊞ Windows | x64 | `.exe` | Windows 10 / 11 |',
+              '| 🍎 macOS | aarch64 / Apple Silicon | `.dmg` | M1 and newer Macs |',
+              '| 🍎 macOS | x64 / Intel | `.dmg` | Intel Macs |',
+              '| 🐧 Linux | x86_64 / amd64 | `.command = "ip link set eth0 mtu 1280"` | Ubuntu, Debian, Linux Mint, Pop!_OS |',
+              '| 🐧 Linux | x86_64 / amd64  | `.rpm` | Fedora, RHEL, CentOS, Rocky, Alma |',
+              '| 🐧 Linux | x86_64 / amd64 | `.flatpak` | Any modern Linux distro |',
+              '| 🐧 Linux | x86_64 / amd64 | `.AppImage` | Any modern Linux distro |',
+              '| 🐧 Linux | aarch64 / arm64 | `.deb` | Ubuntu, Debian, Linux Mint, Pop!_OS |',
+              '| 🐧 Linux | aarch64 / arm64 | `.rpm` | Fedora, RHEL, CentOS, Rocky, Alma |',
+              '| 🐧 Linux | aarch64 / arm64 | `.flatpak` | Any modern Linux distro |',
+              '| 🐧 Linux | aarch64 / arm64 | `.AppImage` | Any modern Linux distro |',
+            ].join('\n')
+
+            const body = [
+              '**Qw Cat** is a desktop application designed for quick video trimming and processing.',
+              changes,
+              table,
+            ].join('\n\n')
+
             const { data } = await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              tag_name: context.ref.replace('refs/tags/', ''),
-              name: context.ref.replace('refs/tags/', ''),
-              generate_release_notes: true,
+              tag_name: tag,
+              name: `Qw Cat ${tag}`,
+              body,
+              generate_release_notes: false,
               draft: true,
               prerelease: false
             })
@@ -195,11 +232,13 @@ jobs:
           release_id: ${{ needs.create-release.outputs.release_id }}
         with:
           script: |
+            // Semver pre-release tags (v1.0.0-rc.1) stay pre-release so releases/latest and the in-app update check skip them
+            const isPrerelease = /^v?\d+\.\d+\.\d+-/.test(context.ref.replace('refs/tags/', ''))
             await github.rest.repos.updateRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
               release_id: process.env.release_id,
               draft: false,
-              prerelease: false,
-              make_latest: "true"
+              prerelease: isPrerelease,
+              make_latest: isPrerelease ? "false" : "true"
             })

@@ -51,6 +51,23 @@
   </screenshots>
 
   <releases>
+    <release version="1.0.0~rc.1" date="2026-10-10" type="development">
+      <url>https://github.com/Neisvestney/qw-cat/releases/tag/v1.0.0-rc.1</url>
+
+      <description>
+        <ul>
+          <li>macOS support (Apple Silicon and Intel)</li>
+          <li>New export wizard with built-in and custom presets and audio settings</li>
+          <li>Hardware-accelerated encoding</li>
+          <li>Settings dialog</li>
+          <li>Recent videos on the start page</li>
+          <li>Playback volume control and improved separate audio tracks playback</li>
+          <li>Remux videos for playback when needed</li>
+          <li>Verify ffmpeg download integrity</li>
+          <li>Token auth for the integrated server</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.5" date="2026-06-30">
       <url>https://github.com/Neisvestney/qw-cat/releases/tag/v0.3.5</url>
 

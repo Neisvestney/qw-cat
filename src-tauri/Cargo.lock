@@ -3522,7 +3522,7 @@ dependencies = [
 
 [[package]]
 name = "qw-cat"
-version = "0.3.5"
+version = "1.0.0-rc.1"
 dependencies = [
  "anyhow",
  "axum",
