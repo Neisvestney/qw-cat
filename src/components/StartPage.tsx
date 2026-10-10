@@ -11,12 +11,14 @@ import {
   CardContent,
   CircularProgress,
   Grid,
+  IconButton,
   Stack,
   Typography,
 } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import ContentCutIcon from "@mui/icons-material/ContentCut";
 import TheatersIcon from "@mui/icons-material/Theaters";
+import SettingsIcon from "@mui/icons-material/Settings";
 import CatIcon from "mdi-material-ui/Cat";
 import VersionChecker from "./VersionChecker.tsx";
 import RecentVideos from "./RecentVideos.tsx";
@@ -130,6 +132,13 @@ const StartPage = observer(() => {
       >
         <VersionChecker />
       </Box>
+      <IconButton
+        title="Settings"
+        onClick={store.openSettingsDialog}
+        sx={{position: "fixed", top: 8, right: 8}}
+      >
+        <SettingsIcon />
+      </IconButton>
       <Backdrop
         sx={(theme) => ({color: "#fff", zIndex: theme.zIndex.snackbar + 1})}
         open={store.fileProcessingInfo}

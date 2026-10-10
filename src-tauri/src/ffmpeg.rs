@@ -1,6 +1,7 @@
 use crate::ffmpeg_download::download_with_progress;
 use crate::ffmpeg_export_command::{ExportOptions, GpuAcceleration};
-use crate::ffmpeg_path::{ffmpeg_is_installed, ffmpeg_path, ffprobe_is_installed};
+use crate::ffmpeg_path::{ffmpeg_path, source_is_available};
+use crate::ffmpeg_settings::FfmpegSource;
 use crate::ffmpeg_time_duration::FfmpegTimeDuration;
 use crate::ffprobe::{get_video_audio_streams_info, get_video_streams_info};
 use crate::select_new_video_file_command::AudioStreamFilePath;
@@ -733,17 +734,12 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                 let ffmpeg_task_clone = ffmpeg_task.clone();
 
                 let ffmpeg_result = tokio::task::spawn_blocking(move || {
-                    let ffmpeg_is_installed = ffmpeg_is_installed();
-                    let ffprobe_is_installed = ffprobe_is_installed();
+                    // The downloaded copy specifically, the source may have been switched since this was queued
+                    let downloaded = source_is_available(FfmpegSource::Downloaded, None);
 
-                    info!(
-                        "FFmpeg is installed: {}, ffprobe is installed: {} (ffmpeg path: {:?})",
-                        ffmpeg_is_installed,
-                        ffprobe_is_installed,
-                        ffmpeg_path().to_str()
-                    );
+                    info!("FFmpeg is downloaded: {downloaded}");
 
-                    if ffmpeg_is_installed && ffprobe_is_installed {
+                    if downloaded {
                         return Ok(true);
                     }
 
@@ -764,7 +760,7 @@ fn run_ffmpeg_task(ffmpeg_task: Arc<RwLock<FfmpegTask>>) -> impl Future<Output =
                         });
                     })?;
 
-                    info!("Ffmpeg downloaded successfully! ({:?})", ffmpeg_path().to_str());
+                    info!("Ffmpeg downloaded successfully!");
 
                     Ok::<bool, anyhow::Error>(false)
                 })

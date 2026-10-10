@@ -5,18 +5,10 @@
         Desktop application designed for quick video trimming and processing.
     </p>
     <p align="center">
-        <a href="https://github.com/Neisvestney/qw-cat/releases/latest">
-            <img alt="Windows download" src="https://img.shields.io/badge/download-windows_x64-blue?style=for-the-badge">
-        </a>
-        <a href="https://github.com/Neisvestney/qw-cat/releases/latest">
-            <img alt="Linux download" src="https://img.shields.io/badge/download-linux_x64_.deb-orange?style=for-the-badge&logo=debian">
-        </a>
-        <a href="https://github.com/Neisvestney/qw-cat/releases/latest">
-            <img alt="Linux download" src="https://img.shields.io/badge/download-linux_x64_.rpm-blue?style=for-the-badge&logo=fedora">
-        </a>
-        <a href="https://github.com/Neisvestney/qw-cat/releases/latest">
-            <img alt="Other download" src="https://img.shields.io/badge/download-other-lightslategray?style=for-the-badge">
-        </a>
+        <a href="https://github.com/Neisvestney/qw-cat/releases/latest"><img alt="Windows download" src="https://img.shields.io/badge/download-windows_x64-blue?style=for-the-badge"></a>
+        <a href="https://github.com/Neisvestney/qw-cat/releases/latest"><img alt="Linux .deb download" src="https://img.shields.io/badge/download-linux_x64_.deb-orange?style=for-the-badge&logo=debian"></a>
+        <a href="https://github.com/Neisvestney/qw-cat/releases/latest"><img alt="Linux .rpm download" src="https://img.shields.io/badge/download-linux_x64_.rpm-blue?style=for-the-badge&logo=fedora"></a>
+        <a href="https://github.com/Neisvestney/qw-cat/releases/latest"><img alt="Other download" src="https://img.shields.io/badge/download-other-lightslategray?style=for-the-badge"></a>
     </p>
 </p>
 <br/>
@@ -32,12 +24,9 @@ Built with Tauri v2 and React, powered by FFmpeg.
 ## Features
 
 - Mixing multiple audio tracks into one with different volume
-- Running FFmpeg with NVIDIA hardware acceleration and using gpu encoders
+- Running FFmpeg with NVIDIA, AMD, Intel or Apple hardware acceleration and using gpu encoders
 - Automatic ffmpeg download
-- Easy-to-use interface with advanced ffmpeg command customization options
-
-**Note:** Currently, only NVIDIA GPU hardware acceleration is supported. AMD and Intel GPU support is not yet
-implemented.
+- Easy-to-use interface with advanced video export options customization
 
 ## Installation
 

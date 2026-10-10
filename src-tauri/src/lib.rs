@@ -3,6 +3,7 @@ mod ffmpeg;
 mod ffmpeg_download;
 mod ffmpeg_export_command;
 mod ffmpeg_path;
+mod ffmpeg_settings;
 mod ffmpeg_time_duration;
 mod ffprobe;
 mod handle_cli_args;
@@ -17,8 +18,9 @@ mod select_new_video_file_command;
 mod temp_cleanup;
 
 use crate::custom_export_presets::{get_custom_export_presets, save_custom_export_presets};
-use crate::ffmpeg::{FfmpegTasksQueue, create_ffmpeg_tasks_queue, emit_ffmpeg_queue_status, enqueue_download_ffmpeg_task};
+use crate::ffmpeg::{create_ffmpeg_tasks_queue, emit_ffmpeg_queue_status};
 use crate::ffmpeg_export_command::{cancel_ffmpeg_task_by_index, ffmpeg_export};
+use crate::ffmpeg_settings::{get_ffmpeg_settings, init_ffmpeg_source, load_ffmpeg_settings, set_ffmpeg_settings};
 use crate::handle_cli_args::handle_cli_args_on_frontend_initialized;
 #[cfg(target_os = "macos")]
 use crate::handle_cli_args::handle_opened_urls;
@@ -63,11 +65,9 @@ pub fn run() {
 
             async_runtime::spawn(cleanup_temp());
 
+            load_ffmpeg_settings(app.handle());
             let app_handle = app.handle().clone();
-            async_runtime::spawn(async move {
-                let queue = app_handle.state::<FfmpegTasksQueue>();
-                enqueue_download_ffmpeg_task(&queue).await;
-            });
+            async_runtime::spawn(async move { init_ffmpeg_source(&app_handle).await });
 
             let app_handle = app.handle().clone();
             app.listen("frontend-initialized", move |_event| {
@@ -99,6 +99,8 @@ pub fn run() {
             open_recent_video,
             remove_recent_video,
             prepare_playback_copy,
+            get_ffmpeg_settings,
+            set_ffmpeg_settings,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

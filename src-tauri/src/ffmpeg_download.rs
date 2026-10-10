@@ -1,4 +1,5 @@
-use crate::ffmpeg_path::{ffmpeg_is_installed, ffprobe_is_installed, sidecar_dir};
+use crate::ffmpeg_path::{sidecar_dir, source_is_available};
+use crate::ffmpeg_settings::FfmpegSource;
 use anyhow::{Context, Result};
 use log::{debug, info};
 use sha2::{Digest, Sha256};
@@ -134,7 +135,7 @@ pub fn download_with_progress(progress_callback: impl Fn(f64)) -> Result<()> {
     }
     progress_callback(1.0);
 
-    if !ffmpeg_is_installed() || !ffprobe_is_installed() {
+    if !source_is_available(FfmpegSource::Downloaded, None) {
         anyhow::bail!("FFmpeg failed to install, please install manually.");
     }
 

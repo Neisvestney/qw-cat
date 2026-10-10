@@ -3,7 +3,10 @@ import {makeAutoObservable, runInAction, toJS} from "mobx";
 import {
   CustomExportPreset,
   detectHwEncoders,
+  FfmpegSettings,
+  FfmpegSettingsState,
   getCustomExportPresets,
+  getFfmpegSettings,
   getIntegratedServerState,
   getRecentVideos,
   openRecentVideo,
@@ -11,6 +14,7 @@ import {
   removeRecentVideo,
   saveCustomExportPresets,
   selectNewVideoFile,
+  setFfmpegSettings,
 } from "../generated";
 import VideoEditorStore from "./VideoEditorStore.ts";
 import {SelectNewVideoFileEvent} from "../generated/bindings/SelectNewVideoFileEvent.ts";
@@ -69,12 +73,17 @@ class AppStateStore {
   // Detected once per session; retried only while ffmpeg is not installed yet
   private hwEncodersFinal = false;
 
-  loadHwEncoders() {
+  // Bumped when ffmpeg changes, so a detection still running for the old one is discarded
+  private hwEncodersGeneration = 0;
+
+  loadHwEncoders(): Promise<string[]> {
     if (this.hwEncodersFinal && this.hwEncoders) return Promise.resolve(this.hwEncoders);
 
+    const generation = this.hwEncodersGeneration;
     this.hwEncodersRequest ??= detectHwEncoders()
       .catch(() => ({encoders: [], ffmpegInstalled: false}))
       .then((result) => {
+        if (generation != this.hwEncodersGeneration) return this.loadHwEncoders();
         runInAction(() => {
           this.hwEncoders = result.encoders;
           this.hwEncodersFinal = result.ffmpegInstalled;
@@ -135,6 +144,42 @@ class AppStateStore {
     });
   }
 
+  ffmpegSettings: FfmpegSettingsState | null = null;
+  settingsDialogOpen = false;
+
+  get ffmpegSourceRequired() {
+    return this.ffmpegSettings != null && this.ffmpegSettings.settings.source == null;
+  }
+
+  async loadFfmpegSettings() {
+    const settings = await getFfmpegSettings();
+    runInAction(() => {
+      this.ffmpegSettings = settings;
+    });
+  }
+
+  // Throws when the chosen ffmpeg isn't usable, the caller shows the message
+  async saveFfmpegSettings(settings: FfmpegSettings) {
+    await setFfmpegSettings({settings});
+    runInAction(() => {
+      // Another ffmpeg build may support other encoders
+      this.hwEncoders = null;
+      this.hwEncodersFinal = false;
+      this.hwEncodersRequest = null;
+      this.hwEncodersGeneration++;
+    });
+    await this.loadFfmpegSettings();
+  }
+
+  openSettingsDialog() {
+    this.settingsDialogOpen = true;
+    this.loadFfmpegSettings().catch((e) => console.error("Can't load ffmpeg settings", e));
+  }
+
+  closeSettingsDialog() {
+    this.settingsDialogOpen = false;
+  }
+
   private disposer: AsyncEventsDisposer | null = null;
 
   get selectNewVideoFileDisabled() {
@@ -191,6 +236,7 @@ class AppStateStore {
     this.loadCustomExportPresets().catch((e) =>
       console.error("Can't load custom export presets", e),
     );
+    this.loadFfmpegSettings().catch((e) => console.error("Can't load ffmpeg settings", e));
     await this.subscribeToIntegratedServerEvents(disposer);
     await this.subscribeToVideoSelectionEvent(disposer);
     await this.ffmpegTasksQueue.listenToFfmpegEvents(disposer);

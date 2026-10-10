@@ -13,6 +13,7 @@ import FfmpegTasksQueueView from "./components/FfmpegTasksQueueView.tsx";
 import LogsStore, {LogsStoreContext} from "./stores/LogsStore.ts";
 import LogsView from "./components/LogsView.tsx";
 import ExportPresetsErrorSnackbar from "./components/ExportPresetsErrorSnackbar.tsx";
+import SettingsDialog from "./components/SettingsDialog.tsx";
 
 const App = observer(() => {
   const [appStateStore] = useState(() => new AppStateStore());
@@ -48,6 +49,7 @@ const App = observer(() => {
           <FfmpegTasksQueueView />
           <LogsView />
           <ExportPresetsErrorSnackbar />
+          <SettingsDialog />
         </ThemeProvider>
       </AppStateStoreContext.Provider>
     </LogsStoreContext.Provider>
