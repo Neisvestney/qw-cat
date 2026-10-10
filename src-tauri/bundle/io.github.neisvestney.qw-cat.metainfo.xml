@@ -51,6 +51,17 @@
   </screenshots>
 
   <releases>
+    <release version="1.0.0~rc.2" date="2026-10-10" type="development">
+      <url>https://github.com/Neisvestney/qw-cat/releases/tag/v1.0.0-rc.2</url>
+
+      <description>
+        <ul>
+          <li>Cache extracted audio tracks and playback copies in the user cache directory instead of the shared temp directory</li>
+          <li>Store downloaded ffmpeg in the app data directory so it is removed together with app data on uninstall</li>
+          <li>Migrate previously downloaded ffmpeg and clean up the old temp directory automatically</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.0~rc.1" date="2026-10-10" type="development">
       <url>https://github.com/Neisvestney/qw-cat/releases/tag/v1.0.0-rc.1</url>
 
