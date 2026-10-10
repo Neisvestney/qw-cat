@@ -40,8 +40,12 @@ export function platformEncoders(gpuVendors: GpuAcceleration[] | null) {
 }
 
 export function gpuVendorsHint(gpuVendors: GpuAcceleration[] | null) {
-  const labels = GPU_ORDER.filter((v) => isVendorOnPlatform(v, gpuVendors)).map((v) => GPU_SHORT_LABELS[v]);
-  return labels.length > 1 ? `${labels.slice(0, -1).join(", ")} or ${labels[labels.length - 1]}` : labels.join("");
+  const labels = GPU_ORDER.filter((v) => isVendorOnPlatform(v, gpuVendors)).map(
+    (v) => GPU_SHORT_LABELS[v],
+  );
+  return labels.length > 1
+    ? `${labels.slice(0, -1).join(", ")} or ${labels[labels.length - 1]}`
+    : labels.join("");
 }
 
 const FAMILY_LABELS: Record<CodecFamily, string> = {
