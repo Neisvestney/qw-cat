@@ -54,7 +54,7 @@ jobs:
               '|  ⊞ Windows | x64 | `.exe` | Windows 10 / 11 |',
               '| 🍎 macOS | aarch64 / Apple Silicon | `.dmg` | M1 and newer Macs |',
               '| 🍎 macOS | x64 / Intel | `.dmg` | Intel Macs |',
-              '| 🐧 Linux | x86_64 / amd64 | `.command = "ip link set eth0 mtu 1280"` | Ubuntu, Debian, Linux Mint, Pop!_OS |',
+              '| 🐧 Linux | x86_64 / amd64 | `.deb` | Ubuntu, Debian, Linux Mint, Pop!_OS |',
               '| 🐧 Linux | x86_64 / amd64  | `.rpm` | Fedora, RHEL, CentOS, Rocky, Alma |',
               '| 🐧 Linux | x86_64 / amd64 | `.flatpak` | Any modern Linux distro |',
               '| 🐧 Linux | x86_64 / amd64 | `.AppImage` | Any modern Linux distro |',
@@ -109,6 +109,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
+          cache: 'yarn'
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -123,7 +124,7 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
 
       - name: Install frontend dependencies
-        run: yarn install
+        run: yarn install --frozen-lockfile --network-timeout 600000
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
@@ -185,9 +186,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
+          cache: 'yarn'
 
       - name: Install frontend dependencies
-        run: yarn install
+        run: yarn install --frozen-lockfile --network-timeout 600000
 
       - name: Generate flatpak manifest
         run: node ./src-tauri/bundle/render-templates.js remote ${{ github.ref_name }}
